@@ -34,4 +34,11 @@ testpaths = ["tests", "src"]
 addopts = "--doctest-modules"
 
 [tool.ruff]
-line-length = 100
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "I"]
+ignore = ["B905"]  # zip(strict=...) is noise for teaching code
+
+[tool.ruff.lint.per-file-ignores]
+"src/bellgame/__init__.py" = ["F401"]  # names are re-exported as bg.<name>

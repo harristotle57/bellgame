@@ -222,6 +222,7 @@ def from_networkx(graph):
     """Build a network from a networkx graph; each edge's ``length`` attribute is its km.
 
     This lets you use SeQUeNCe's graph builders in ``sequence.utils.graphs``.
+    An edge ``attenuation`` (SeQUeNCe's dB per meter) sets that link's ``loss_db_per_km``.
 
     Example:
         >>> G = nx.Graph()
@@ -234,7 +235,11 @@ def from_networkx(graph):
         if "length" not in data:
             raise ValueError(f"edge ({a}, {b}) has no 'length' (km) attribute")
         edges.append((str(a), str(b), float(data["length"])))
-    return from_edges(edges, names=[str(n) for n in graph.nodes])
+    net = from_edges(edges, names=[str(n) for n in graph.nodes])
+    for a, b, data in graph.edges(data=True):
+        if "attenuation" in data:
+            set_link(net, a, b, loss_db_per_km=_clean(float(data["attenuation"]) * KM))
+    return net
 
 
 def to_matrix(net):
