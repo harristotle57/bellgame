@@ -58,6 +58,16 @@ from .network import (
     two_star,
 )
 from .paths import build, compose_path, end_to_end
+from .plots import (
+    plot_angles,
+    plot_convergence,
+    plot_correlations,
+    plot_network,
+    plot_photon_numbers,
+    plot_results,
+    plot_sweep,
+    reference_lines,
+)
 from .qubits import (
     apply_local,
     bell_pair,
