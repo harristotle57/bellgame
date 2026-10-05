@@ -252,6 +252,13 @@ def play_chsh(strategy, source, rounds=None, seed=None):
         >>> r["rounds"]
         1000
     """
+    if isinstance(source, dict) and "mean_photon_number" in source:
+        from .link import link_outcomes
+
+        table, coincidence_prob = link_outcomes(source, strategy)
+        result = summarize(table, rounds=rounds, seed=seed)
+        result["coincidence_prob"] = coincidence_prob
+        return result
     table = table_from_strategy(strategy, source)
     result = summarize(table, rounds=rounds, seed=seed)
     if isinstance(source, dict):
