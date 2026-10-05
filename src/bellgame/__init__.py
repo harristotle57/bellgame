@@ -34,6 +34,30 @@ from .link import (
     link_table,
     photon_numbers,
 )
+from .network import (
+    add_node,
+    connect,
+    empty_network,
+    from_edges,
+    from_matrix,
+    from_networkx,
+    link_params,
+    links,
+    memory_params,
+    node_names,
+    parameters,
+    set_all_links,
+    set_detectors,
+    set_link,
+    set_memory,
+    set_source,
+    star,
+    to_matrix,
+    to_networkx,
+    two_player_network,
+    two_star,
+)
+from .paths import build, compose_path, end_to_end
 from .qubits import (
     apply_local,
     bell_pair,

@@ -40,6 +40,13 @@ hand-off document for a fresh session. Milestone 0 then scaffolds around it.
   - Fock support is component-level only (`QuantumManagerDensityFock`, `SPDCSource`, `FockDetector`, `QSDetectorFock*`, `FockBeamSplitter*`,
     Fock loss in `QuantumChannel`); the router stack (`RouterNetTopo`, `RequestApp`, swapping) is qubit-only, hence the hybrid design
   - `RouterNetTopo` accepts a config dict with a `"formalism"` key
+  - **M3 spike result:** `RouterNetTopo` accepts our dict, but Barrett-Kok's `SingleAtomBSM` raises
+    `NotImplementedError("Unknown state")` under `density_matrix`, so the network dict uses `"formalism": "ket_vector"`
+    (SeQUeNCe's state is never used; quality comes from the Fock model). A1->B2 routes A1, HubA, HubB, B2.
+    Runtime is ~11 s per simulated second for the 8-node two-star, so `end_to_end` defaults to `sim_time_s=0.2`.
+  - Memory wait times: Barrett-Kok doesn't set `Memory.generation_time`, so `_sequence_adapter` wraps each router's
+    `resource_manager.update` to timestamp generation (EntanglementGenerationA -> ENTANGLED) and swap consumption
+    (EntanglementSwappingA); the RequestApp subclass records end-node waits at delivery.
   - graph tooling already exists: `sequence/utils/graphs.py` (`build_star`, `build_linear`, `build_ring`, `build_tree`, …, returning networkx graphs) and
     `sequence/utils/nx_converter.py` (networkx → `RouterNetTopo` config; its default template uses `single_heralded`/Bell-diagonal, so we
     supply our own Barrett-Kok + `density_matrix` template)
@@ -108,7 +115,7 @@ This gives students one clear concept to hold onto: a strategy plus a network gi
 
 2. **Network layer, hybrid** (`network.py`, `paths.py`):
    - **Topology** is a plain dict that *is* a valid SeQUeNCe `RouterNetTopo` config (`nodes`, `qconnections`, `cconnections`,
-     `templates`, `"formalism": "density_matrix"`), stored in SeQUeNCe-native units. Each `qconnection` also carries a
+     `templates`, `"formalism": "ket_vector"`, see the M3 spike note), stored in SeQUeNCe-native units. Each `qconnection` also carries a
      `"photonics"` sub-dict of Fock link parameters, which is stripped before handing the dict to SeQUeNCe.
    - **Rates and timing** come from SeQUeNCe's router stack, run on the same distances, attenuation and efficiencies:
      `RouterNetTopo(config)` + a `RequestApp` from the end node, giving real routing, Barrett-Kok generation, swapping at the hubs,
