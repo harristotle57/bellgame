@@ -1,0 +1,3 @@
+# Labs and examples are plain Python files with "# %%" cells.
+# Open them as notebooks in Jupyter, or run them in Spyder / VS Code.
+formats = "ipynb,py:percent"
