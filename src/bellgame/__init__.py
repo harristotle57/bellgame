@@ -57,6 +57,15 @@ from .network import (
     two_player_network,
     two_star,
 )
+from .optimize import (
+    chsh_objective,
+    compare_optimizers,
+    find_alignment,
+    misaligned_source,
+    random_misalignment,
+    with_correction,
+    wrap_angles,
+)
 from .paths import build, compose_path, end_to_end
 from .plots import (
     plot_angles,
