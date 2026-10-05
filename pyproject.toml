@@ -32,6 +32,7 @@ packages = ["src/bellgame"]
 [tool.pytest.ini_options]
 testpaths = ["tests", "src"]
 addopts = "--doctest-modules"
+filterwarnings = ["ignore::SyntaxWarning"]  # from an escape sequence inside sequence 1.2.0
 
 [tool.ruff]
 line-length = 120

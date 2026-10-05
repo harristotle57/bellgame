@@ -245,6 +245,14 @@ Every function takes results or tables, accepts an optional `ax=`, returns `ax`,
 7. **Labs 01–08, examples (including two-star), students template, CONTRIBUTING.**
 8. **CI:** `uv sync`, `uv run pytest`, and executing every `labs/*.py` and `examples/*.py` as a smoke test.
 
+## Status (2026-10-04)
+
+All milestones M0-M8 are done, one local git commit each (no remote yet). 125 tests pass (`uv run pytest`,
+docstring examples included); every lab and example runs top to bottom; ruff is clean; labs convert with jupytext.
+Deviations from the plan, all recorded above: `ket_vector` formalism (M3 spike), standard polarization E91 bases
+(M6), and a `heralded` link knob, because an unheralded SPDC source can't show the 82.8% detection-loophole
+threshold (vacuum pulses dominate when `no_click` isn't `discard`).
+
 ## Verification
 
 - **Analytic checks (pytest):**
