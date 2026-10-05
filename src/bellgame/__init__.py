@@ -4,6 +4,7 @@ Use it as ``import bellgame as bg``. Everything is available as ``bg.<name>``.
 """
 
 from .defaults import DEFAULTS, default_values, describe
+from .e91 import E91_OLD_SETTINGS, E91_SETTINGS, run_e91
 from .fock import fiber_transmissivity
 from .game import (
     CLASSICAL_S,

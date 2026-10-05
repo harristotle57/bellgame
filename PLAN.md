@@ -238,6 +238,10 @@ Every function takes results or tables, accepts an optional `ax=`, returns `ax`,
 4. **Plots.**
 5. **Optimize:** `chsh_objective`, `find_alignment`, `compare_optimizers` (Nelder-Mead, COBYQA).
 6. **E91:** bases A {0, 45, 90}°, B {22.5, 67.5, 112.5}°, using the old `E91_CHSH_MAP` with fixed signs.
+   **Changed during M6:** in polarization angles those old bases have no matching Alice/Bob pair (key QBER 14.6% even
+   for a perfect pair) and the old map with the fixed sign pattern gives S = 0. Default is now standard polarization
+   E91: A {0, 22.5, 45}°, B {22.5, 45, 67.5}°, key from (22.5, 22.5) and (45, 45). The old angles stay available as
+   `bg.E91_OLD_SETTINGS` with a CHSH map that is correct for the fixed sign pattern.
 7. **Labs 01–08, examples (including two-star), students template, CONTRIBUTING.**
 8. **CI:** `uv sync`, `uv run pytest`, and executing every `labs/*.py` and `examples/*.py` as a smoke test.
 
