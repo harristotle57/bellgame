@@ -173,9 +173,7 @@ def sequence_config(net, seed):
             "decoherence_errors": [float(e) for e in p["memory_errors"]],
         }}
         nodes.append({"name": name, "type": "QuantumRouter", "seed": seed * 1000 + i,
-                      "memo_size": int(p["memory_size"]), "template": f"node_{name}",
-                      "gate_fidelity": float(p["gate_fidelity"]),
-                      "measurement_fidelity": float(p["measurement_fidelity"])})
+                      "memo_size": int(p["memory_size"]), "template": f"node_{name}"})
     for i, (a, b) in enumerate(links(net)):
         p = link_params(net, a, b)
         detector = {"efficiency": float(p["detector_efficiency"]), "dark_count": float(p["dark_count_rate_hz"]),
@@ -218,8 +216,12 @@ def to_sequence(net, seed=None, stop_time_s=None):
     with bell_diagonal_mode():
         topo = RouterNetTopo(config)
     routers = {r.name: r for r in topo.get_nodes_by_type(RouterNetTopo.QUANTUM_ROUTER)}
-    for router in routers.values():
+    for name, router in routers.items():
         router.bellgame_pairs = {}
+        # RouterNetTopo ignores gate/measurement fidelity in the config, so set them on the router itself
+        p = node_params(net, name)
+        router.gate_fid = float(p["gate_fidelity"])
+        router.meas_fid = float(p["measurement_fidelity"])
     for a, b in links(net):
         weights = pair_weights(link_params(net, a, b))
         routers[a].bellgame_pairs[b] = weights

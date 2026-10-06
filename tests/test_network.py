@@ -49,6 +49,24 @@ def test_matrix_must_be_symmetric():
         bg.from_matrix(NAMES, d)
 
 
+def test_matrix_inf_means_no_link():
+    d = two_star_matrix()
+    d[d == 0] = np.inf
+    np.fill_diagonal(d, 0)
+    assert bg.from_matrix(NAMES, d) == builder_net()
+    d[0, 1] = d[1, 0] = np.nan
+    with pytest.raises(ValueError, match="NaN"):
+        bg.from_matrix(NAMES, d)
+
+
+def test_from_networkx_keeps_sequence_attenuation():
+    from sequence.utils.graphs import build_star
+    net = bg.from_networkx(build_star(2, length=7, attenuation=0.0003))
+    assert bg.links(net) == [("0", "1"), ("0", "2")]
+    p = bg.link_params(net, "0", "1")
+    assert p["distance_km"] == 7 and np.isclose(p["loss_db_per_km"], 0.3)
+
+
 def test_set_link_and_node():
     net = builder_net()
     bg.set_link(net, "A1", "HubA", distance_km=7, link_model="fock", mean_photon_number=0.05)
@@ -132,6 +150,18 @@ def test_two_star_matches_swap_theory_without_decay():
     run = bg.run_network(net, "A1", "B2", sim_time_s=0.3, seed=1)
     v = (4 * 0.95 - 1) / 3
     assert np.isclose(run["fidelity"], (3 * v**3 + 1) / 4, atol=1e-6)
+
+
+def test_gate_fidelity_reaches_the_swaps():
+    # Werner-twirled swap with gate fidelity g: visibility picks up a factor g per swap.
+    net = builder_net()
+    bg.set_all_links(net, link_model="fixed", raw_fidelity=0.95)
+    bg.set_node(net, coherence_time_ms=float("inf"), gate_fidelity=0.9)
+    topo = bg.to_sequence(net, seed=1)
+    assert all(r.gate_fid == 0.9 for r in topo.get_nodes_by_type("QuantumRouter"))
+    run = bg.run_network(net, "A1", "B2", sim_time_s=0.3, seed=1)
+    v = (4 * 0.95 - 1) / 3
+    assert np.isclose(run["fidelity"], (3 * 0.9**2 * v**3 + 1) / 4, atol=1e-6)
 
 
 def test_memory_decay_lowers_s():

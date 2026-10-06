@@ -152,16 +152,20 @@ def from_edges(edges, names=None):
 
 
 def from_matrix(names, dist_km):
-    """Build a network from a symmetric distance matrix in km (0 means no link).
+    """Build a network from a symmetric distance matrix in km (0 or ``np.inf`` means no link).
 
     Example:
-        >>> links(from_matrix(["A", "B"], np.array([[0, 5], [5, 0]])))
+        >>> links(from_matrix(["A", "B", "C"], np.array([[0, 5, 0], [5, 0, np.inf], [0, np.inf, 0]])))
         [('A', 'B')]
     """
     dist_km = np.asarray(dist_km, dtype=float)
     n = len(names)
     if dist_km.shape != (n, n):
         raise ValueError(f"distance matrix must be {n} x {n} for {n} names, got {dist_km.shape}")
+    if np.any(np.isnan(dist_km)):
+        i, j = np.argwhere(np.isnan(dist_km))[0]
+        raise ValueError(f"dist[{i}, {j}] is NaN; use 0 or np.inf for no link")
+    dist_km = np.where(np.isinf(dist_km) & (dist_km > 0), 0.0, dist_km)
     if not np.allclose(dist_km, dist_km.T):
         i, j = np.argwhere(~np.isclose(dist_km, dist_km.T))[0]
         raise ValueError(f"distance matrix must be symmetric: dist[{i}, {j}] = {dist_km[i, j]} "
@@ -178,7 +182,8 @@ def from_matrix(names, dist_km):
 def from_networkx(graph):
     """Build a network from a networkx graph; each edge's ``length`` attribute is its km.
 
-    This lets you use SeQUeNCe's graph builders in ``sequence.utils.graphs``.
+    This lets you use SeQUeNCe's graph builders in ``sequence.utils.graphs``. An
+    edge's ``attenuation`` (dB/m, as those builders set it) becomes ``loss_db_per_km``.
 
     Example:
         >>> G = nx.Graph()
@@ -191,7 +196,11 @@ def from_networkx(graph):
         if "length" not in data:
             raise ValueError(f"edge ({a}, {b}) has no 'length' (km) attribute")
         edges.append((str(a), str(b), float(data["length"])))
-    return from_edges(edges, names=[str(n) for n in graph.nodes])
+    net = from_edges(edges, names=[str(n) for n in graph.nodes])
+    for a, b, data in graph.edges(data=True):
+        if "attenuation" in data:
+            set_link(net, a, b, loss_db_per_km=float(data["attenuation"]) * 1000)
+    return net
 
 
 def to_matrix(net):
