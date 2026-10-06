@@ -12,8 +12,9 @@
 # In words: their answers should be *different* only when both questions are 1.
 
 # %%
-import bellgame as bg
 import numpy as np
+
+import bellgame as bg
 
 # The referee's rule, as a function. Try a few cases by hand first!
 print(bg.referee_wins(x=0, y=0, a=0, b=0))   # x AND y = 0, answers equal -> win
