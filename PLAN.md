@@ -1,3 +1,9 @@
+> **Superseded (network-core branch, 2026-10-05).** Networks are no longer hybrid: SeQUeNCe's
+> Bell-diagonal stack simulates generation, swapping and memory decay end to end, and the game is played
+> on the pairs it delivers (`bg.run_network`, `src/bellgame/simulate.py`). `paths.py`, `_sequence_adapter.py`,
+> `bg.swap`, `bg.dephase` and `bg.link_state` are gone. The Fock model now feeds a network link's pair
+> quality (`link_model="fock"`). This file is kept as the record of the original design; see README.md.
+
 # Plan: `bellgame` — CHSH over simulated quantum networks, for students
 
 ## Context

@@ -18,7 +18,7 @@ from matplotlib.colors import LinearSegmentedColormap, LogNorm
 
 from .game import CLASSICAL_S, CLASSICAL_WIN_RATE, TSIRELSON_S, TSIRELSON_WIN_RATE
 from .link import photon_numbers
-from .network import KM, node_names
+from .network import to_networkx
 
 # Colors, by job (validated categorical order: blue, orange, aqua, ...)
 SERIES = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7", "#e34948"]
@@ -216,10 +216,7 @@ def plot_convergence(histories, ax=None, label=None):
 def plot_network(net, ax=None, highlight=None):
     """Draw the network: nodes, fiber links labeled in km. ``highlight`` = a path to color."""
     ax = _new_ax(ax, figsize=(7, 4.5))
-    g = nx.Graph()
-    g.add_nodes_from(node_names(net))
-    for q in net["qconnections"]:
-        g.add_edge(q["node1"], q["node2"], km=q["distance"] / KM)
+    g = to_networkx(net)
     pos = nx.kamada_kawai_layout(g, weight=None) if g.number_of_edges() else nx.circular_layout(g)
     path_edges = set()
     if highlight:
@@ -231,7 +228,7 @@ def plot_network(net, ax=None, highlight=None):
                            edgecolors=SURFACE, linewidths=2)
     nx.draw_networkx_labels(g, pos, ax=ax, font_size=8, font_color="white")
     nx.draw_networkx_edge_labels(g, pos, ax=ax, font_size=8, font_color=TEXT_SECONDARY,
-                                 edge_labels={e: f"{d['km']:g} km" for e, d in g.edges.items()},
+                                 edge_labels={e: f"{d['length']:g} km" for e, d in g.edges.items()},
                                  bbox={"boxstyle": "round", "fc": SURFACE, "ec": "none"})
     ax.set_title("Network" + (f" (path {' > '.join(highlight)})" if highlight else ""),
                  color=TEXT, fontsize=10, loc="left")
@@ -240,7 +237,10 @@ def plot_network(net, ax=None, highlight=None):
 
 
 def plot_photon_numbers(link_params, ax=None):
-    """Heatmap of how many photons reach Alice and Bob per pulse (shows multi-pair emission)."""
+    """Heatmap of how many photons reach Alice and Bob per pulse (shows multi-pair emission).
+
+    ``link_params`` is a photonic link (``bg.link``) or a network link (``bg.link_params``).
+    """
     ax = _new_ax(ax, figsize=(4.8, 4))
     p = photon_numbers(link_params)
     shown = np.where(p > 0, p, np.nan)

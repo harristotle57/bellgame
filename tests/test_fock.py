@@ -48,25 +48,16 @@ def test_single_photon_rotation_matches_qubit_rotation():
     assert np.allclose(big[np.ix_(idx, idx)], bg.polarization_rotation(angles))
 
 
-def test_link_state_matches_fock_table_in_ideal_limit():
-    params = bg.link(**{**IDEAL, "bob_misalignment_deg": [5, 10, -20]})
-    state, _ = bg.link_state(params)
-    strat = {**bg.optimal_strategy(), "bob_correction": [3, 4, 5]}
-    a = bg.table_from_state(strat, state)
-    b = bg.link_table(params, strat)
-    assert np.allclose(a, b, atol=1e-3)
-
-
 def test_loss_lowers_coincidences():
     near = bg.play_chsh(bg.optimal_strategy(), bg.link(distance_km=0))["coincidence_prob"]
     far = bg.play_chsh(bg.optimal_strategy(), bg.link(distance_km=50))["coincidence_prob"]
     assert far == pytest.approx(near * fock.fiber_transmissivity(50, 0.2), rel=0.05)
 
 
-def test_link_state_fidelity_drops_with_multi_pairs_and_loss():
-    low, _ = bg.link_state(bg.link(mean_photon_number=0.001, distance_km=50))
-    high, _ = bg.link_state(bg.link(mean_photon_number=0.1, distance_km=50))
-    assert bg.fidelity(low) > bg.fidelity(high)
+def test_fock_pair_fidelity_drops_with_multi_pairs():
+    low, _ = bg.fock_pair_weights(bg.link(mean_photon_number=0.001, distance_km=50))
+    high, _ = bg.fock_pair_weights(bg.link(mean_photon_number=0.1, distance_km=50))
+    assert low[0] > high[0]
 
 
 def test_bad_parameter_name():

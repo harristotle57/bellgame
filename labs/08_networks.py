@@ -1,8 +1,9 @@
 # %% [markdown]
-# # Lab 08: Quantum networks
+# # Lab 08: Playing over a quantum network
 #
 # **Python skill:** building nested dicts and numpy matrices.
-# **Physics idea:** entanglement swapping lets distant nodes share pairs, at a cost.
+# **Physics idea:** a network has to *deliver* a pair before every question, and
+# everything it does on the way (swapping, waiting in memory) costs fidelity.
 #
 # A network is one dict. You can build it several ways; they all give the same dict.
 # We'll build the **two-star** network: two hubs, each with three leaf nodes,
@@ -35,60 +36,119 @@ plt.show()
 
 # %% [markdown]
 # Every knob lives in the dict. `bg.parameters(net)` prints them all.
-# Change them with `bg.set_link` and `bg.set_memory`.
+# Change them with `bg.set_link` (fiber, detectors, pair quality) and
+# `bg.set_node` (quantum memories, swapping hardware).
 
 # %%
 bg.parameters(net)
-bg.set_memory(net, coherence_time_ms=50)
 
 # %% [markdown]
-# ## Entanglement across the network
+# ## A game across the network
 #
-# A1 and B2 have no fiber between them. SeQUeNCe (the network simulator inside
-# bellgame) finds the route A1 -> HubA -> HubB -> B2, makes a pair on each link,
-# and **swaps** at the hubs to join them.
+# A1 and B2 have no fiber between them. `bg.run_network` hands the network to
+# **SeQUeNCe**, a quantum network simulator, and runs it like an experiment:
 #
-# **Assumption:** each link's photons are stored in quantum memories when they
-# arrive. While a qubit waits in memory it slowly loses its phase
-# (`coherence_time_ms`), and that is one of the costs you'll see.
+# 1. SeQUeNCe finds the route A1 -> HubA -> HubB -> B2, keeps making pairs on
+#    every link, and **swaps** at the hubs to join them into an A1-B2 pair.
+#    Pairs wait in quantum memories, and slowly decay while they wait.
+# 2. A referee asks a question 1000 times per second. If A1 and B2 share a pair
+#    at that moment, they measure it. If not, that question has no pair.
+#
+# The result's `"state"` is the average pair the players measured, so you can
+# play it like any other source.
 
 # %%
-path = bg.end_to_end(net, "A1", "B2", seed=1)
-print("route:", path["path"])
-print("pairs per second:", path["rate_hz"])
-print("time qubits waited (ms):", {k: round(v, 2) for k, v in path["wait_ms"].items()})
-print("end-to-end fidelity:", round(path["fidelity"], 3))
-for link in path["links"]:
-    print("   link", link["nodes"], "fidelity", round(link["fidelity"], 4))
+run = bg.run_network(net, "A1", "B2", sim_time_s=0.5, seed=1)
+print("route:", run["path"])
+print(f"{run['rounds']} of {run['questions']} questions had a pair")
+print(f"asked {run['questions_hz']:.0f} questions/s, network delivered {run['pairs_hz']:.0f} pairs/s,",
+      f"so {run['rounds_hz']:.0f} rounds/s were played")
+print("pairs waited on average (ms):", round(run["pair_age_ms"], 2))
+print("fidelity of the pairs used:", round(run["fidelity"], 3))
+for link in run["links"]:
+    print("   fresh pair on link", link["nodes"], "fidelity", round(link["fidelity"], 4))
 
-result = bg.play_chsh(bg.optimal_strategy(), path)
-print("S between A1 and B2:", round(result["S"], 3))
-bg.plot_network(net, highlight=path["path"])
+strategy = bg.optimal_strategy()
+print("S, exact:", round(bg.play_chsh(strategy, run)["S"], 3))
+print("S, as measured in those rounds:", round(bg.play_chsh(strategy, run, rounds=run["rounds"], seed=1)["S"], 3))
+# With a few hundred rounds the measured S wobbles by about +/- 0.15. Try other seeds!
+bg.plot_network(net, highlight=run["path"])
 plt.show()
 
 # %% [markdown]
-# ## Your turn: a sweep over the hub-to-hub distance
+# ## How good is a fresh pair? Three link models
+#
+# Every link has a `link_model`:
+#
+# * `"fixed"`: every pair has fidelity `raw_fidelity`, no matter how long the fiber
+# * `"analytic"` (the default): the same, but dark counts fake some heralds, and
+#   that matters more when fewer real photons survive a long fiber
+# * `"fock"`: a full photon-by-photon simulation of the source (see Lab 04),
+#   including the source sometimes making two pairs at once
+#
+# **Your turn:** predict which model gives the highest S here, then check.
+
+# %%
+for model in ["fixed", "analytic", "fock"]:
+    bg.set_all_links(net, link_model=model)
+    r = bg.run_network(net, "A1", "B2", sim_time_s=0.3, seed=1)
+    print(f"{model:9s} S = {bg.play_chsh(strategy, r)['S']:.3f}")
+bg.set_all_links(net, link_model="analytic")
+
+# %% [markdown]
+# ## Your turn: sweeps
+#
+# 1. The hub-to-hub distance. Longer fiber means fewer pairs (the rate falls)
+#    and pairs waiting longer in memory.
+# 2. The memory coherence time: how long a memory keeps its qubit.
 
 # %%
 hub_kms = [10, 20, 40]
 rates, results = [], []
 for km in hub_kms:
     n = bg.two_star("HubA", ["A1"], "HubB", ["B2"], leaf_km=5, hub_km=km)
-    p = bg.end_to_end(n, "A1", "B2", seed=1)
-    rates.append(p["rate_hz"])
-    results.append(bg.play_chsh(bg.optimal_strategy(), p))
+    r = bg.run_network(n, "A1", "B2", sim_time_s=0.3, seed=1)
+    rates.append(r["rounds_hz"])
+    results.append(bg.play_chsh(strategy, r))
 bg.plot_sweep(hub_kms, results, metric="S", xlabel="hub-to-hub distance (km)")
 plt.show()
-print("rates (pairs/s):", rates)
+print("rounds per second:", rates)
+
+# %%
+coherence_ms = [5, 20, 100, 1000]
+results = []
+for t in coherence_ms:
+    n = bg.two_star("HubA", ["A1"], "HubB", ["B2"], leaf_km=5, hub_km=20)
+    bg.set_node(n, coherence_time_ms=t)
+    results.append(bg.play_chsh(strategy, bg.run_network(n, "A1", "B2", sim_time_s=0.3, seed=1)))
+ax = bg.plot_sweep(coherence_ms, results, metric="S", xlabel="memory coherence time (ms)")
+ax.set_xscale("log")
+plt.show()
+
+# %% [markdown]
+# ## No pair, no fair?
+#
+# Above, questions without a pair were thrown away (`no_pair="discard"`). In a
+# strict test of the game, the players must answer *every* question. With
+# `no_pair="random"` they guess when they have no pair.
+#
+# **Your turn:** make the hub link longer until the players lose their quantum
+# advantage under the strict rule, even though the pairs they do get are fine.
+
+# %%
+n = bg.two_star("HubA", ["A1"], "HubB", ["B2"], leaf_km=5, hub_km=20)
+for policy in ["discard", "random"]:
+    r = bg.run_network(n, "A1", "B2", sim_time_s=0.3, seed=1, no_pair=policy)
+    print(f"{policy:8s} S = {bg.play_chsh(strategy, r)['S']:.3f}")
 
 # %% [markdown]
 # ## Under the hood: SeQUeNCe
 #
-# `bg.build(net)` hands the dict to SeQUeNCe and gives you its topology object.
+# `bg.to_sequence(net)` hands the dict to SeQUeNCe and gives you its topology object.
 # Everything SeQUeNCe knows is in there. Explore!
 
 # %%
-topo = bg.build(net)
+topo = bg.to_sequence(net)
 for router in topo.get_nodes_by_type("QuantumRouter"):
     memories = router.get_components_by_type("MemoryArray")[0]
     print(router.name, "has", len(memories), "memories")

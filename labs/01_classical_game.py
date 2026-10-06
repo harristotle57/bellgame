@@ -13,6 +13,7 @@
 
 # %%
 import bellgame as bg
+import numpy as np
 
 # The referee's rule, as a function. Try a few cases by hand first!
 print(bg.referee_wins(x=0, y=0, a=0, b=0))   # x AND y = 0, answers equal -> win
@@ -43,8 +44,20 @@ print("win rate:", result["win_rate"])
 # 2. There are only four functions from one bit to one bit. bellgame has them in
 #    `bg.CLASSICAL_PLAYERS`. The loop below tries every pair.
 
+def alice(x):
+    return int(round(np.random.uniform(), 0))
+
+def bob(y):
+    return int(round(np.random.uniform(), 0))
+
+# Players who flip coins have no single exact answer, so play an experiment.
+result = bg.play_classical(alice, bob, rounds=10_000, seed=1)
+print("win rate", result["win_rate"])
+
 # %%
 best = 0
+header = ["Alice Strat", "Bob Strat", "Win Rate"]
+print(f"{header[0]:12} {header[1]:12} {header[2]}")
 for alice_name, alice_fn in bg.CLASSICAL_PLAYERS.items():
     for bob_name, bob_fn in bg.CLASSICAL_PLAYERS.items():
         rate = bg.play_classical(alice_fn, bob_fn)["win_rate"]
@@ -55,4 +68,10 @@ print("best classical win rate:", best)
 # %% [markdown]
 # No pair beats **0.75**. (Shared random numbers don't help either: a random
 # strategy is just a mix of these sixteen, so it can't beat the best one.)
+#
+# Memory doesn't help either. A player can also be `player(bit, history)`, where
+# `history` is their own past rounds as `(question, answer)` pairs; see
+# `examples/classical_strategies.py`. While the referee's questions are fair coin
+# flips, the past says nothing about this round's questions. The only way past
+# 75% is a referee whose questions can be predicted.
 # Keep this number in mind: quantum players will beat it in lab 03.

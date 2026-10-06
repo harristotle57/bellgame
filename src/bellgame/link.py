@@ -18,7 +18,7 @@ Example:
 import numpy as np
 
 from . import fock
-from .defaults import DEFAULTS, default_values
+from .defaults import DEFAULTS, PHOTONIC_GROUPS, default_values
 from .strategies import check_strategy
 
 NO_CLICK_POLICIES = ("discard", "random", "zero")
@@ -34,7 +34,7 @@ def link(**changes):
         >>> link(detector_efficiency=0.9)["detector_efficiency"]
         0.9
     """
-    params = default_values("link")
+    params = default_values(*PHOTONIC_GROUPS)
     for name, value in changes.items():
         if name not in params:
             raise ValueError(f"'{name}' is not a link parameter. Link parameters are: "
@@ -44,9 +44,21 @@ def link(**changes):
     return params
 
 
+def photonic(params):
+    """A full photonic link dict from any link-like dict (e.g. a network link), filling gaps with defaults.
+
+    Example:
+        >>> photonic({"distance_km": 3})["no_click"]
+        'discard'
+    """
+    full = default_values(*PHOTONIC_GROUPS)
+    full.update({k: v for k, v in params.items() if k in full})
+    return full
+
+
 def check_link(params):
     """Raise a friendly error if a link dict has a bad value."""
-    for name in default_values("link"):
+    for name in default_values(*PHOTONIC_GROUPS):
         if name not in params:
             raise ValueError(f"link is missing '{name}' (make links with bg.link(...))")
     if params["no_click"] not in NO_CLICK_POLICIES:
@@ -187,25 +199,9 @@ def link_table(params, strategy):
     return link_outcomes(params, strategy)[0]
 
 
-def link_state(params):
-    """(state, probability): the link's effective two-qubit state, for use in networks.
-
-    We keep only the pulses that leave exactly one photon at each end (this is
-    what a heralded quantum memory would store), and write that photon pair as a
-    4x4 qubit density matrix. ``probability`` is the chance per pulse.
-
-    Example:
-        >>> import bellgame as bg
-        >>> state, p = link_state(link(distance_km=50, mean_photon_number=0.05))
-        >>> round(bg.fidelity(state), 3)
-        0.968
-    """
-    t = int(params["truncation"])
-    return fock.one_photon_each_state(arriving_state(params), t)
-
-
 def photon_numbers(params):
     """p[nA, nB]: chance of nA photons reaching Alice and nB reaching Bob (before detection)."""
+    params = photonic(params)
     return fock.photon_number_distribution(arriving_state(params), int(params["truncation"]))
 
 
@@ -214,3 +210,46 @@ def describe_link(params):
     for name, value in params.items():
         entry = DEFAULTS.get(name, {"unit": "", "meaning": ""})
         print(f"  {name:24s} = {value!s:18s} {entry['unit']:8s} {entry['meaning']}")
+
+
+# Measuring ZZ, XX and YY on the pair. YY uses a correction wave plate that turns
+# circular polarization onto H/V (the sign flip is the same for both players, so it cancels).
+_PAULI_SETTINGS = {
+    "zz": {"alice": [0, 0], "bob": [0, 0]},
+    "xx": {"alice": [45, 45], "bob": [45, 45]},
+    "yy": {"alice": [0, 0], "bob": [0, 0], "alice_correction": [45, 0, 0], "bob_correction": [45, 0, 0]},
+}
+
+
+def fock_pair_weights(params):
+    """(weights, coincidence_prob): the Bell-state make-up of the pairs this link delivers.
+
+    This is how the Fock model feeds a network. We look only at pulses where
+    both ends click (what heralds a stored pair), measure the ZZ, XX and YY
+    correlations, and turn them into weights ``[Phi+, Phi-, Psi+, Psi-]`` (the
+    first one is the fidelity). ``params`` can be a network link (the photonic
+    extras are filled in with no misalignment).
+
+    Example:
+        >>> w, p = fock_pair_weights(link(distance_km=0))
+        >>> round(w[0], 3)  # not 1: sometimes the source makes two pairs at once
+        0.995
+    """
+    full = photonic(params)
+    full["alice_misalignment_deg"] = [0.0, 0.0, 0.0]
+    full["bob_misalignment_deg"] = [0.0, 0.0, 0.0]
+    full["no_click"] = "discard"
+    t = {}
+    coincidence = 0.0
+    for name, strategy in _PAULI_SETTINGS.items():
+        table, coincidence = link_outcomes(full, strategy)
+        signs = np.array([[1, -1], [-1, 1]])
+        t[name] = float(np.sum(signs * table[:, :, 0, 0]))
+    weights = np.array([
+        1 + t["xx"] - t["yy"] + t["zz"],  # Phi+
+        1 - t["xx"] + t["yy"] + t["zz"],  # Phi-
+        1 + t["xx"] + t["yy"] - t["zz"],  # Psi+
+        1 - t["xx"] - t["yy"] - t["zz"],  # Psi-
+    ]) / 4
+    weights = np.clip(weights, 0, None)
+    return (weights / weights.sum()).tolist(), coincidence

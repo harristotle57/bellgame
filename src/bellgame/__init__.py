@@ -1,5 +1,8 @@
 """bellgame: the CHSH game over simulated quantum networks.
 
+SeQUeNCe simulates the network (``bg.run_network``); bellgame plays the game on
+the pairs it delivers.
+
 Use it as ``import bellgame as bg``. Everything is available as ``bg.<name>``.
 """
 
@@ -11,17 +14,21 @@ from .game import (
     CLASSICAL_WIN_RATE,
     TSIRELSON_S,
     TSIRELSON_WIN_RATE,
+    answer,
     chsh_value,
     correlations,
     play_chsh,
     play_classical,
+    play_rounds,
     referee_wins,
     sample_counts,
     summarize,
+    summarize_counts,
     table_from_classical,
     table_from_counts,
     table_from_state,
     table_from_strategy,
+    uses_history,
     win_rate,
 )
 from .link import (
@@ -29,9 +36,9 @@ from .link import (
     check_link,
     dark_count_prob,
     describe_link,
+    fock_pair_weights,
     link,
     link_outcomes,
-    link_state,
     link_table,
     photon_numbers,
 )
@@ -44,14 +51,12 @@ from .network import (
     from_networkx,
     link_params,
     links,
-    memory_params,
     node_names,
+    node_params,
     parameters,
     set_all_links,
-    set_detectors,
     set_link,
-    set_memory,
-    set_source,
+    set_node,
     star,
     to_matrix,
     to_networkx,
@@ -67,7 +72,6 @@ from .optimize import (
     with_correction,
     wrap_angles,
 )
-from .paths import build, compose_path, end_to_end
 from .plots import (
     plot_angles,
     plot_convergence,
@@ -80,17 +84,17 @@ from .plots import (
 )
 from .qubits import (
     apply_local,
+    bell_diagonal,
     bell_pair,
-    dephase,
     fidelity,
     misalign,
     polarization_rotation,
     rx,
     ry,
     rz,
-    swap,
     werner,
 )
+from .simulate import analytic_pair_weights, bell_diagonal_mode, pair_weights, run_network, to_sequence
 from .strategies import (
     CLASSICAL_PLAYERS,
     always_one,

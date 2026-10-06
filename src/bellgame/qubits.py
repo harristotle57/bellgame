@@ -6,6 +6,10 @@ Conventions used everywhere in bellgame:
 * All angles are in **degrees**.
 * A two-qubit state is a 4x4 density matrix. Qubit 0 is Alice's, qubit 1 is Bob's.
 
+Noise *in the network* (memories decaying, entanglement swapping) is simulated
+by SeQUeNCe; see ``bg.run_network``. The functions here build states and turn
+polarization.
+
 Example:
     >>> import bellgame as bg
     >>> rho = bg.bell_pair(fidelity=0.9)
@@ -19,10 +23,16 @@ I2 = np.eye(2, dtype=complex)
 X = np.array([[0, 1], [1, 0]], dtype=complex)
 Y = np.array([[0, -1j], [1j, 0]], dtype=complex)
 Z = np.array([[1, 0], [0, -1]], dtype=complex)
-PAULIS = [I2, X, Y, Z]
 
 # Phi+ = (|00> + |11>) / sqrt(2) = (|HH> + |VV>) / sqrt(2)
 PHI_PLUS = np.array([1, 0, 0, 1], dtype=complex) / np.sqrt(2)
+# Phi+, then Phi+ hit by a Z, an X, and a Y error (SeQUeNCe's Bell-diagonal order)
+BELL_STATES = [
+    PHI_PLUS,
+    np.array([1, 0, 0, -1], dtype=complex) / np.sqrt(2),  # Phi-
+    np.array([0, 1, 1, 0], dtype=complex) / np.sqrt(2),   # Psi+
+    np.array([0, 1, -1, 0], dtype=complex) / np.sqrt(2),  # Psi-
+]
 
 
 def ket_to_dm(ket):
@@ -145,56 +155,19 @@ def misalign(rho, alice_deg=(0, 0, 0), bob_deg=(0, 0, 0)):
     return apply_local(rho, polarization_rotation(alice_deg), polarization_rotation(bob_deg))
 
 
-def dephase(rho, wait_ms, coherence_time_ms, qubits=(0, 1)):
-    """Memory decoherence: each listed qubit loses phase coherence while it waits.
+def bell_diagonal(weights):
+    """A mixture of the four Bell states, given their weights in SeQUeNCe's order.
 
-    The off-diagonal part of each waiting qubit shrinks by exp(-wait_ms / coherence_time_ms).
-    ``wait_ms`` can be one number, or one number per qubit in ``qubits``.
+    ``weights = [Phi+, Phi-, Psi+, Psi-]``, which is SeQUeNCe's Bell-diagonal order
+    "I, Z, X, Y": the error that turns Phi+ into each state. The first weight is
+    the fidelity.
 
     Example:
-        >>> rho = dephase(bell_pair(), wait_ms=1.0, coherence_time_ms=10.0)
+        >>> rho = bell_diagonal([0.9, 0.1, 0, 0])
         >>> round(fidelity(rho), 3)
-        0.909
+        0.9
     """
-    if coherence_time_ms <= 0:
-        raise ValueError(f"coherence_time_ms must be positive, got {coherence_time_ms}")
-    waits = np.broadcast_to(np.asarray(wait_ms, dtype=float), (len(qubits),))
-    out = np.array(rho, dtype=complex)
-    for q, t in zip(qubits, waits):
-        lam = np.exp(-t / coherence_time_ms)
-        zq = np.kron(Z, I2) if q == 0 else np.kron(I2, Z)
-        out = (1 + lam) / 2 * out + (1 - lam) / 2 * zq @ out @ zq
-    return out
-
-
-def _bell_basis():
-    """The four Bell states, in the order matching PAULIS: Phi+, Psi+, Psi-, Phi-."""
-    kets = []
-    for p in PAULIS:
-        # (I x P) |Phi+>
-        kets.append(np.kron(I2, p) @ PHI_PLUS)
-    return kets
-
-
-def swap(rho_ab, rho_cd):
-    """Entanglement swapping: join pair A-B and pair C-D into pair A-D.
-
-    The middle node holds B and C, does a Bell measurement on them, tells D the
-    result, and D applies the matching Pauli correction. We average over all
-    four outcomes, so the result is the state A and D end up sharing.
-
-    Example:
-        >>> round(fidelity(swap(bell_pair(), bell_pair())), 3)
-        1.0
-    """
-    big = np.kron(rho_ab, rho_cd).reshape([2] * 8)  # indices: a b c d | a' b' c' d'
-    out = np.zeros((4, 4), dtype=complex)
-    for bell, pauli in zip(_bell_basis(), PAULIS):
-        proj = bell.reshape(2, 2)  # amplitudes over (b, c)
-        # <bell|_{bc} rho |bell>_{bc}
-        reduced = np.einsum("bc,abcdefgh,fg->adeh", proj.conj(), big, proj)
-        reduced = reduced.reshape(4, 4)
-        # the outcome "bell = (I x P)|Phi+>" leaves A-D in (I x P*)|Phi+>; undo with P^T on D
-        corr = np.kron(I2, pauli.T)
-        out += corr @ reduced @ corr.conj().T
-    return out
+    weights = np.asarray(weights, dtype=float)
+    if weights.shape != (4,) or np.any(weights < -1e-12) or not np.isclose(weights.sum(), 1):
+        raise ValueError(f"need 4 non-negative weights that add up to 1, got {list(weights)}")
+    return sum(w * ket_to_dm(ket) for w, ket in zip(weights, BELL_STATES))

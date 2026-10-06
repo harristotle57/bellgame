@@ -1,7 +1,8 @@
 """The CHSH game.
 
-The referee sends Alice a random bit x and Bob a random bit y. Alice answers a,
-Bob answers b. They win when ``a XOR b == x AND y``.
+The referee flips two fair coins and sends Alice one bit x and Bob another bit
+y: ordinary classical bits, independent and uniformly random. Alice answers a
+bit a, Bob a bit b, without talking. They win when ``a XOR b == x AND y``.
 
 Everything in bellgame boils down to a **probability table**
 ``table[a, b, x, y] = p(a, b | x, y)``, a numpy array of shape (2, 2, 2, 2).
@@ -13,6 +14,8 @@ Example:
     >>> round(result["win_rate"], 4)
     0.8536
 """
+
+import inspect
 
 import numpy as np
 
@@ -34,22 +37,83 @@ def referee_wins(x, y, a, b):
     return (a ^ b) == (x & y)
 
 
+def uses_history(player):
+    """True when a classical player takes the past rounds as a second argument: ``player(bit, history)``."""
+    try:
+        return len(inspect.signature(player).parameters) >= 2
+    except (TypeError, ValueError):
+        return False
+
+
+def answer(player, bit, history=()):
+    """Ask a classical player for its answer bit (passing ``history`` if it wants it)."""
+    a = player(bit, list(history)) if uses_history(player) else player(bit)
+    if a not in (0, 1):
+        raise ValueError(f"players must answer 0 or 1, got {a!r} for question {bit}")
+    return int(a)
+
+
 def table_from_classical(alice, bob):
-    """Probability table for two classical player functions.
+    """Exact probability table for two classical players who always give the same answer to the same question.
+
+    Players who flip coins, or look at past rounds, have no single table;
+    play them for a number of rounds instead (``bg.play_classical(..., rounds=N)``).
 
     Example:
         >>> from bellgame.strategies import always_zero
         >>> win_rate(table_from_classical(always_zero, always_zero))
         0.75
     """
+    answers = {}
+    for name, player in (("alice", alice), ("bob", bob)):
+        if uses_history(player):
+            raise ValueError(f"{name} looks at past rounds, so there is no exact answer; "
+                             "play an experiment instead: bg.play_classical(alice, bob, rounds=10000)")
+        for bit in (0, 1):
+            seen = {answer(player, bit) for _ in range(16)}
+            if len(seen) > 1:
+                raise ValueError(f"{name} answers question {bit} at random, so there is no exact answer; "
+                                 "play an experiment instead: bg.play_classical(alice, bob, rounds=10000)")
+            answers[name, bit] = seen.pop()
     table = np.zeros((2, 2, 2, 2))
     for x in (0, 1):
         for y in (0, 1):
-            a, b = alice(x), bob(y)
-            if a not in (0, 1) or b not in (0, 1):
-                raise ValueError(f"players must answer 0 or 1, got a={a}, b={b}")
-            table[a, b, x, y] = 1.0
+            table[answers["alice", x], answers["bob", y], x, y] = 1.0
     return table
+
+
+def play_rounds(alice, bob, rounds, seed=None, questions=None):
+    """Play ``rounds`` rounds one at a time with two classical players; return counts like ``sample_counts``.
+
+    Each round the referee picks the questions, then each player answers. A
+    player can be ``player(bit)`` or ``player(bit, history)``, where ``history``
+    is that player's own past rounds as a list of ``(question, answer)``. Players
+    may also flip their own coins. ``questions`` replaces the fair referee with
+    your own: a function of the round number (0, 1, 2, ...) that returns ``(x, y)``.
+
+    Example:
+        >>> from bellgame.strategies import always_zero
+        >>> counts = play_rounds(always_zero, always_zero, 100, seed=1)
+        >>> sum(sum(c.values()) for c in counts.values())
+        100
+    """
+    if rounds < 1:
+        raise ValueError(f"rounds must be at least 1, got {rounds}")
+    rng = np.random.default_rng(seed)
+    counts = {(x, y): {"00": 0, "01": 0, "10": 0, "11": 0} for x in (0, 1) for y in (0, 1)}
+    alice_past, bob_past = [], []
+    for n in range(rounds):
+        if questions is None:
+            x, y = (int(q) for q in rng.integers(0, 2, size=2))
+        else:
+            x, y = questions(n)
+            if x not in (0, 1) or y not in (0, 1):
+                raise ValueError(f"questions must be bits, got x={x!r}, y={y!r} in round {n}")
+        a, b = answer(alice, x, alice_past), answer(bob, y, bob_past)
+        alice_past.append((x, a))
+        bob_past.append((y, b))
+        counts[(x, y)][f"{a}{b}"] += 1
+    return counts
 
 
 def table_from_state(strategy, rho):
@@ -82,7 +146,7 @@ def table_from_strategy(strategy, source):
     ``source`` can be:
 
     * a 4x4 two-qubit density matrix (e.g. ``bg.bell_pair(0.9)``)
-    * the dict returned by ``bg.end_to_end`` (uses its ``"state"``)
+    * the dict returned by ``bg.run_network`` (uses its ``"state"``)
     * a photonic link dict from ``bg.link(...)`` (Fock model, see ``bg.link_table``)
 
     Example:
@@ -97,7 +161,7 @@ def table_from_strategy(strategy, source):
     if isinstance(source, dict) and "state" in source:
         return table_from_state(strategy, source["state"])
     if isinstance(source, dict):
-        raise ValueError("source dict must be a link (bg.link) or a path result (bg.end_to_end)")
+        raise ValueError("source dict must be a link (bg.link) or a network run (bg.run_network)")
     return table_from_state(strategy, source)
 
 
@@ -200,43 +264,47 @@ def summarize(table, rounds=None, seed=None):
         >>> summarize(table_from_classical(always_zero, always_zero))["win_rate"]
         0.75
     """
-    result = {}
-    if rounds is None:
-        used = table
-    else:
-        counts = sample_counts(table, rounds, seed=seed)
-        used = table_from_counts(counts)
-        wins = 0
-        for (x, y), c in counts.items():
-            for ab, k in c.items():
-                if referee_wins(x, y, int(ab[0]), int(ab[1])):
-                    wins += k
-        result["rounds"] = rounds
-        result["wins"] = wins
-        result["counts"] = counts
-    e = correlations(used)
-    if rounds is None:
-        result["win_rate"] = win_rate(used)
-    else:
-        result["win_rate"] = result["wins"] / rounds
-    result["S"] = chsh_value(used)
-    result["E"] = np.round(e, 6).tolist()
-    result["table"] = table
-    return result
+    if rounds is not None:
+        result = summarize_counts(sample_counts(table, rounds, seed=seed))
+        result["table"] = table
+        return result
+    return {"win_rate": win_rate(table), "S": chsh_value(table), "E": np.round(correlations(table), 6).tolist(),
+            "table": table}
 
 
-def play_classical(alice, bob, rounds=None, seed=None):
+def summarize_counts(counts):
+    """Result dict for an experiment's counts: win rate, S and correlations as measured."""
+    rounds = sum(sum(c.values()) for c in counts.values())
+    wins = sum(k for (x, y), c in counts.items() for ab, k in c.items()
+               if referee_wins(x, y, int(ab[0]), int(ab[1])))
+    table = table_from_counts(counts)
+    return {"rounds": rounds, "wins": wins, "counts": counts, "win_rate": wins / rounds, "S": chsh_value(table),
+            "E": np.round(correlations(table), 6).tolist(), "table": table}
+
+
+def play_classical(alice, bob, rounds=None, seed=None, questions=None):
     """Play the CHSH game with two classical player functions.
 
-    With ``rounds=None`` you get the exact win rate; with a number you get a
-    simulated experiment with that many rounds.
+    With ``rounds=None`` you get the exact win rate (only for players who always
+    give the same answer to the same question). With a number, the players
+    really play that many rounds, one at a time, so they may flip coins or look
+    at their own past rounds (``player(bit, history)``, see ``bg.play_rounds``).
+    ``questions`` swaps in your own referee.
 
     Example:
         >>> from bellgame.strategies import always_zero
         >>> play_classical(always_zero, always_zero)["win_rate"]
         0.75
+        >>> import random
+        >>> coin = lambda bit: random.randint(0, 1)
+        >>> play_classical(coin, coin, rounds=10000, seed=1)["win_rate"] < 0.75
+        True
     """
-    return summarize(table_from_classical(alice, bob), rounds=rounds, seed=seed)
+    if rounds is None:
+        if questions is not None:
+            raise ValueError("a custom referee (questions=) needs an experiment: pass rounds=N")
+        return summarize(table_from_classical(alice, bob))
+    return summarize_counts(play_rounds(alice, bob, rounds, seed=seed, questions=questions))
 
 
 def play_chsh(strategy, source, rounds=None, seed=None):
@@ -262,7 +330,7 @@ def play_chsh(strategy, source, rounds=None, seed=None):
     table = table_from_strategy(strategy, source)
     result = summarize(table, rounds=rounds, seed=seed)
     if isinstance(source, dict):
-        for key in ("coincidence_prob", "rate_hz", "fidelity"):
+        for key in ("coincidence_prob", "rounds_hz", "fidelity"):
             if key in source:
                 result[key] = source[key]
     return result

@@ -189,28 +189,3 @@ def photon_number_distribution(rho, truncation):
                 for bv in range(d):
                     p[ah + av, bh + bv] += diag[ah, av, bh, bv]
     return p
-
-
-def one_photon_each_state(rho, truncation):
-    """Project onto exactly one photon at Alice and one at Bob, as a 4x4 qubit state.
-
-    Returns ``(state, probability)``. ``state`` is normalized; ``probability``
-    is how likely this one-photon-each event is.
-
-    Example:
-        >>> state, p = one_photon_each_state(spdc_state(0.01), 2)
-        >>> state.shape
-        (4, 4)
-    """
-    d = truncation + 1
-
-    def index(ah, av, bh, bv):
-        return ((ah * d + av) * d + bh) * d + bv
-
-    # qubit order |HH>, |HV>, |VH>, |VV>  ->  qubit |00>, |01>, |10>, |11>
-    idx = [index(1, 0, 1, 0), index(1, 0, 0, 1), index(0, 1, 1, 0), index(0, 1, 0, 1)]
-    block = rho[np.ix_(idx, idx)]
-    p = float(np.real(np.trace(block)))
-    if p <= 0:
-        return np.eye(4) / 4, 0.0
-    return block / p, p
