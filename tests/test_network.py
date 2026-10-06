@@ -217,3 +217,66 @@ def test_sequence_settings_are_put_back():
     bg.to_sequence(bg.two_player_network())
     bg.run_network(bg.two_player_network(5), "Alice", "Bob", sim_time_s=0.01, seed=1)
     assert settings() == before
+
+
+# ---------------------------------------------------------------- memories, rates and history
+
+def test_players_get_all_their_memories_on_a_direct_link():
+    run = bg.run_network(bg.two_player_network(50), "Alice", "Bob", sim_time_s=0.05, seed=1)
+    assert run["memories"] == 10  # the default memory_size; no node in the middle to share them
+
+
+def test_middle_nodes_split_their_memories(two_star_run):
+    assert two_star_run["memories"] == 5
+    net = bg.set_node(builder_net(), "HubA", memory_size=1)
+    with pytest.raises(ValueError, match="at least 2 memories"):
+        bg.run_network(net, "A1", "B2", sim_time_s=0.01)
+
+
+def test_rates_show_each_step_of_the_path(two_star_run):
+    links, nodes = two_star_run["links"], two_star_run["nodes"]
+    assert [q["nodes"] for q in links] == [["A1", "HubA"], ["HubA", "HubB"], ["HubB", "B2"]]
+    assert all(q["pairs_hz"] >= two_star_run["pairs_hz"] > 0 for q in links)  # every end-to-end pair needs one per link
+    swaps = {n["node"]: n["swaps_hz"] for n in nodes}
+    assert swaps["A1"] == swaps["B2"] == 0
+    assert swaps["HubA"] >= two_star_run["pairs_hz"] and swaps["HubB"] >= two_star_run["pairs_hz"]
+
+
+def test_metrics_switch_is_restored():
+    from sequence.utils import metrics
+    before = (metrics._enabled, metrics._enabled_events, metrics.storage)
+    bg.run_network(bg.two_player_network(5), "Alice", "Bob", sim_time_s=0.01, seed=1)
+    assert (metrics._enabled, metrics._enabled_events, metrics.storage) == before
+
+
+def test_history_has_one_entry_per_question(two_star_run):
+    h = two_star_run["history"]
+    assert all(len(v) == two_star_run["questions"] for v in h.values())
+    assert h["had_pair"].sum() == two_star_run["rounds"]
+    assert np.all(np.isnan(h["age_ms"][~h["had_pair"]])) and not np.any(np.isnan(h["age_ms"][h["had_pair"]]))
+    assert np.allclose(two_star_run["state"], bg.bell_diagonal(h["weights"][h["had_pair"]].mean(axis=0)))
+
+
+def test_play_history_matches_the_average_state(two_star_run):
+    strategy = bg.optimal_strategy()
+    exact = bg.play_chsh(strategy, two_star_run)["win_rate"]
+    result = bg.play_history(strategy, two_star_run, seed=1)
+    assert result["rounds"] == two_star_run["rounds"]
+    h = result["history"]
+    assert np.all(h["a"][~h["played"]] == -1)
+    assert result["wins"] == h["win"].sum()
+    assert abs(result["win_rate"] - exact) < 4 * np.sqrt(exact * (1 - exact) / result["rounds"])
+
+
+def test_play_history_answers_missing_pairs_at_random():
+    run = bg.run_network(bg.two_player_network(60), "Alice", "Bob", sim_time_s=0.2, seed=3, no_pair="random")
+    assert run["rounds"] < run["questions"]
+    assert bg.play_history(bg.optimal_strategy(), run, seed=1)["rounds"] == run["questions"]
+
+
+def test_old_pairs_are_worse():
+    net = bg.set_node(bg.two_player_network(20), coherence_time_ms=5)
+    run = bg.run_network(net, "Alice", "Bob", questions_hz=500, sim_time_s=0.5, seed=1, pick="oldest")
+    h = run["history"]
+    used = h["had_pair"]
+    assert np.corrcoef(h["age_ms"][used], h["weights"][used, 0])[0, 1] < -0.5

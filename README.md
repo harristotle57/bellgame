@@ -137,10 +137,19 @@ classical game to networks.
   Questions with no pair are discarded, or answered at random (`no_pair`).
 * **Supply and demand:** a run reports `questions_hz` (the referee's demand),
   `pairs_hz` (pairs the network delivered: the supply) and `rounds_hz` (rounds
-  actually played), which can't beat either of the other two.
+  actually played), which can't beat either of the other two. To find the
+  bottleneck, `run["links"]` gives each link's pair-generation rate and
+  `run["nodes"]` each node's swap and memory-expiry rates (from SeQUeNCe's own
+  event metrics).
+* **Memories:** SeQUeNCe reserves the same number of memories on every link of
+  the path (`run["memories"]`). The players need one per pair, a middle node one
+  per side, so a middle node with `memory_size` 10 allows 5.
 * The run's `"state"` is the average pair the players measured. Their
   measurements don't change the network, and outcome probabilities are linear
   in the state, so this gives exactly the statistics of the whole experiment.
+  `run["history"]` keeps every question (time, pair age, pair state), and
+  `bg.play_history(strategy, run)` plays those rounds one by one, on the pair
+  each one actually got.
 * **A link's fresh pair** comes from its `link_model`: `"fixed"` (`raw_fidelity`
   at any distance), `"analytic"` (default: dark counts fake a growing share of
   heralds as the fiber gets longer), or `"fock"` (below).

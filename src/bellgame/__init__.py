@@ -19,6 +19,7 @@ from .game import (
     correlations,
     play_chsh,
     play_classical,
+    play_history,
     play_rounds,
     referee_wins,
     sample_counts,
@@ -94,7 +95,15 @@ from .qubits import (
     rz,
     werner,
 )
-from .simulate import analytic_pair_weights, bell_diagonal_mode, pair_weights, run_network, to_sequence
+from .simulate import (
+    analytic_pair_weights,
+    bell_diagonal_mode,
+    expected_path,
+    pair_weights,
+    path_memories,
+    run_network,
+    to_sequence,
+)
 from .strategies import (
     CLASSICAL_PLAYERS,
     always_one,

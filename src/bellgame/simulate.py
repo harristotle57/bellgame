@@ -45,6 +45,8 @@ from sequence.kernel.event import Event
 from sequence.kernel.process import Process
 from sequence.kernel.quantum_manager import QuantumManager
 from sequence.topology.router_net_topo import RouterNetTopo
+from sequence.utils import metrics
+from sequence.utils.metrics import EventTypes
 
 from .link import fock_pair_weights
 from .network import link_params, links, node_names, node_params, to_networkx
@@ -281,8 +283,8 @@ class _Referee:
         self.timeline, self.alice, self.bob = timeline, alice, bob
         self.period_ps, self.pick = period_ps, pick
         self.questions = 0
-        self.states = []
-        self.ages_ms = []
+        self.discarded = 0  # pairs both players held but let go unused (pick="newest")
+        self.history = {"t_ms": [], "had_pair": [], "age_ms": [], "weights": []}
 
     def shared_pairs(self):
         self.alice.forget_lost(self.bob.node.name)
@@ -297,6 +299,8 @@ class _Referee:
     def ask(self):
         self.questions += 1
         pairs = self.shared_pairs()
+        self.history["t_ms"].append(self.timeline.now() / PS_PER_MS)
+        self.history["had_pair"].append(bool(pairs))
         if pairs:
             if self.pick == "newest":
                 used, rest = pairs[-1], pairs[:-1]
@@ -305,13 +309,67 @@ class _Referee:
             ma, mb = used
             ma.bds_decohere()
             mb.bds_decohere()
-            weights = self.timeline.quantum_manager.get(ma.qstate_key).state
-            self.states.append(bell_diagonal(np.clip(np.real(weights), 0, None) / np.sum(np.real(weights))))
-            self.ages_ms.append((self.timeline.now() - ma.generation_time) / PS_PER_MS)
+            weights = np.clip(np.real(self.timeline.quantum_manager.get(ma.qstate_key).state), 0, None)
+            self.history["weights"].append(weights / np.sum(weights))
+            self.history["age_ms"].append((self.timeline.now() - ma.generation_time) / PS_PER_MS)
+            self.discarded += len(rest)
             for a_mem, b_mem in [used] + rest:  # used pair is measured; older ones are let go
                 self.alice.release(a_mem)
                 self.bob.release(b_mem)
+        else:
+            self.history["weights"].append(np.full(4, np.nan))
+            self.history["age_ms"].append(np.nan)
         self.timeline.schedule(Event(self.timeline.now() + self.period_ps, Process(self, "ask", [])))
+
+
+@contextlib.contextmanager
+def _recording_metrics():
+    """Turn on SeQUeNCe's event recording (generation, swaps, expiries) and restore it afterwards.
+
+    Like its protocol choices, SeQUeNCe's metrics switch is shared by the whole
+    program, so we save it, record into a fresh store, and put everything back.
+    """
+    saved = (metrics._enabled, metrics._enabled_events, metrics._enabled_metrics, metrics.storage)
+    try:
+        metrics.storage = metrics.InMemoryStorage()
+        metrics._enabled = True
+        metrics._enabled_metrics = set()
+        metrics._enabled_events = {EventTypes.EG_SUCCESS, EventTypes.ES_SUCCESS, EventTypes.ES_FAILURE,
+                                   EventTypes.MEMORY_EXPIRED}
+        yield metrics.storage
+    finally:
+        metrics._enabled, metrics._enabled_events, metrics._enabled_metrics, metrics.storage = saved
+
+
+def expected_path(net, alice, bob):
+    """The path SeQUeNCe will route through: the shortest by fiber length (its static routing)."""
+    alice, bob = str(alice), str(bob)
+    graph = to_networkx(net)
+    try:
+        # SeQUeNCe always searches from the alphabetically larger name, so ties break the same way
+        if bob > alice:
+            return nx.dijkstra_path(graph, alice, bob, weight="length")
+        return nx.dijkstra_path(graph, bob, alice, weight="length")[::-1]
+    except nx.NetworkXNoPath:
+        raise ValueError(f"'{alice}' and '{bob}' are not connected") from None
+
+
+def path_memories(net, path):
+    """How many memories SeQUeNCe can reserve on each link of ``path``.
+
+    Every link on the path gets the same number. The two players use one memory
+    per pair; a node in the middle needs one for each side, so twice as many.
+
+    Example:
+        >>> import bellgame as bg
+        >>> path_memories(bg.two_player_network(), ["Alice", "Bob"])  # 10 memories each
+        10
+        >>> net = bg.two_star("HubA", ["A1"], "HubB", ["B1"])
+        >>> path_memories(net, ["A1", "HubA", "HubB", "B1"])
+        5
+    """
+    sizes = [int(node_params(net, n)["memory_size"]) for n in path]
+    return min([sizes[0], sizes[-1]] + [m // 2 for m in sizes[1:-1]])
 
 
 def run_network(net, alice, bob, questions_hz=1000.0, sim_time_s=1.0, seed=None, no_pair="discard",
@@ -330,7 +388,8 @@ def run_network(net, alice, bob, questions_hz=1000.0, sim_time_s=1.0, seed=None,
 
     * ``state``: the average state the players measured (use it with ``bg.play_chsh``)
     * ``fidelity``: how close that is to a perfect Bell pair
-    * ``path``: the nodes SeQUeNCe routed through
+    * ``path``: the nodes SeQUeNCe routed through, and ``memories``: how many
+      memories it reserved on each link of it
     * three rates: ``questions_hz`` (the referee's demand), ``pairs_hz`` (pairs the
       network delivered to the players: the supply), and ``rounds_hz``
       (questions answered with a pair). ``rounds_hz`` can't beat either of the
@@ -338,13 +397,22 @@ def run_network(net, alice, bob, questions_hz=1000.0, sim_time_s=1.0, seed=None,
       close to ``pairs_hz``, the players are waiting for pairs.
     * ``questions`` and ``rounds``: the same, as counts
     * ``pair_age_ms``: how long, on average, a used pair had been waiting
-    * ``links``: each link's fresh-pair fidelity
+    * ``discarded_hz``: pairs the players held but threw away unused (``pick="newest"``)
+    * ``links``: for each link on the path, its fresh-pair ``fidelity`` and
+      ``pairs_hz``, how fast it makes pairs. The slowest link limits everything after it.
+    * ``nodes``: for each node on the path, ``swaps_hz`` (successful swaps; zero at
+      the players) and ``expired_hz`` (pairs lost because a memory ran out of time)
+    * ``history``: one entry per question, as numpy arrays: ``t_ms`` (when it was
+      asked), ``had_pair``, ``age_ms`` and ``weights`` (the pair's four Bell weights;
+      NaN when there was no pair). ``bg.play_history`` plays these rounds one by one.
     * ``seed``: the seed this run used
 
     Example:
         >>> import bellgame as bg
         >>> run = bg.run_network(bg.two_player_network(50), "Alice", "Bob", sim_time_s=0.2, seed=1)
         >>> run["rounds_hz"] <= min(run["questions_hz"], run["pairs_hz"])
+        True
+        >>> len(run["history"]["t_ms"]) == run["questions"]
         True
     """
     if no_pair not in NO_PAIR_POLICIES:
@@ -354,18 +422,18 @@ def run_network(net, alice, bob, questions_hz=1000.0, sim_time_s=1.0, seed=None,
     for name in (alice, bob):
         if str(name) not in net["nodes"]:
             raise ValueError(f"no node called '{name}' in the network")
-    # reserving the path takes a round trip between the players; start the game after that
-    try:
-        km = nx.shortest_path_length(to_networkx(net), str(alice), str(bob), weight="length")
-    except nx.NetworkXNoPath:
-        raise ValueError(f"'{alice}' and '{bob}' are not connected") from None
+    path = expected_path(net, alice, bob)
+    memories = path_memories(net, path)
+    if memories < 1:
+        raise ValueError(f"a node in the middle of the path {path} needs at least 2 memories (memory_size)")
+    km = nx.path_weight(to_networkx(net), path, weight="length")
     seed = new_seed() if seed is None else int(seed)
+    # reserving the path takes a round trip between the players; start the game after that
     start_ps = START_PS + 4 * int(km / FIBER_KM_PER_S * PS_PER_S)
     end_ps = start_ps + int(sim_time_s * PS_PER_S)
     period_ps = int(PS_PER_S / questions_hz)
-    memories = max(1, min(int(p["memory_size"]) for p in net["nodes"].values()) // 2)
 
-    with bell_diagonal_mode():
+    with bell_diagonal_mode(), _recording_metrics() as records:
         topo = to_sequence(net, seed=seed, stop_time_s=end_ps / PS_PER_S)
         routers = {r.name: r for r in topo.get_nodes_by_type(RouterNetTopo.QUANTUM_ROUTER)}
         timeline = topo.get_timeline()
@@ -379,18 +447,21 @@ def run_network(net, alice, bob, questions_hz=1000.0, sim_time_s=1.0, seed=None,
     if not pa.reservation_result:
         raise ValueError(f"SeQUeNCe could not reserve a path from '{alice}' to '{bob}'. Are they connected, "
                          "and does every node on the way have enough memories (memory_size)?")
-    rounds = len(referee.states)
+    history = {key: np.array(value, dtype=bool if key == "had_pair" else float)
+               for key, value in referee.history.items()}
+    history["weights"] = history["weights"].reshape(-1, 4)
+    used = history["weights"][history["had_pair"]]
+    rounds = len(used)
     missed = referee.questions - rounds
-    total = sum(referee.states, np.zeros((4, 4), dtype=complex))
-    noise = np.eye(4, dtype=complex) / 4
+    noise = np.full(4, 0.25)
     if no_pair == "random":
-        state = (total + missed * noise) / max(1, referee.questions)
+        weights = (used.sum(axis=0) + missed * noise) / max(1, referee.questions)
     else:
-        state = total / rounds if rounds else noise
-    link_info = [{"nodes": [u, v], "fidelity": routers[u].bellgame_pairs[v][0]}
-                 for u, v in zip(pa.path, pa.path[1:])]
+        weights = used.mean(axis=0) if rounds else noise
+    state = bell_diagonal(weights)
     return {
         "path": list(pa.path),
+        "memories": memories,
         "state": state,
         "fidelity": fidelity(state),
         "questions_hz": referee.questions / sim_time_s,
@@ -398,8 +469,35 @@ def run_network(net, alice, bob, questions_hz=1000.0, sim_time_s=1.0, seed=None,
         "rounds_hz": rounds / sim_time_s,
         "questions": referee.questions,
         "rounds": rounds,
-        "pair_age_ms": float(np.mean(referee.ages_ms)) if referee.ages_ms else float("nan"),
-        "links": link_info,
+        "pair_age_ms": float(np.nanmean(history["age_ms"])) if rounds else float("nan"),
+        "discarded_hz": referee.discarded / sim_time_s,
+        "links": _link_rates(pa.path, routers, records, sim_time_s),
+        "nodes": _node_rates(pa.path, records, sim_time_s),
+        "history": history,
+        "no_pair": no_pair,
         "sim_time_s": sim_time_s,
         "seed": seed,
     }
+
+
+def _link_rates(path, routers, records, sim_time_s):
+    """Fresh-pair fidelity and generation rate of each link on the path."""
+    made = {}
+    for r in records.get_by_event(EventTypes.EG_SUCCESS):  # both ends record each pair; count one
+        made[r.owner_name, r.data.remote_node] = made.get((r.owner_name, r.data.remote_node), 0) + 1
+    return [{"nodes": [u, v], "fidelity": routers[u].bellgame_pairs[v][0],
+             "pairs_hz": made.get((u, v), 0) / sim_time_s}
+            for u, v in zip(path, path[1:])]
+
+
+def _node_rates(path, records, sim_time_s):
+    """Successful swaps and expired memories per second at each node on the path."""
+    def per_node(event):
+        counts = {}
+        for r in records.get_by_event(event):
+            counts[r.owner_name] = counts.get(r.owner_name, 0) + 1
+        return counts
+
+    swaps, expired = per_node(EventTypes.ES_SUCCESS), per_node(EventTypes.MEMORY_EXPIRED)
+    return [{"node": n, "swaps_hz": swaps.get(n, 0) / sim_time_s, "expired_hz": expired.get(n, 0) / sim_time_s}
+            for n in path]

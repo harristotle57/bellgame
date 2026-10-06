@@ -66,12 +66,19 @@ print(f"asked {run['questions_hz']:.0f} questions/s, network delivered {run['pai
 print("pairs waited on average (ms):", round(run["pair_age_ms"], 2))
 print("fidelity of the pairs used:", round(run["fidelity"], 3))
 for link in run["links"]:
-    print("   fresh pair on link", link["nodes"], "fidelity", round(link["fidelity"], 4))
+    print(f"   link {link['nodes']}: fresh-pair fidelity {link['fidelity']:.4f}, makes {link['pairs_hz']:.0f} pairs/s")
+for node in run["nodes"]:
+    print(f"   node {node['node']}: {node['swaps_hz']:.0f} swaps/s, {node['expired_hz']:.0f} pairs/s expired")
+print(f"the players threw away {run['discarded_hz']:.0f} pairs/s (pick='newest' keeps only the latest)")
+# The slowest step in the chain (a link, or a node's swaps) limits pairs_hz.
 
 strategy = bg.optimal_strategy()
 print("S, exact:", round(bg.play_chsh(strategy, run)["S"], 3))
-print("S, as measured in those rounds:", round(bg.play_chsh(strategy, run, rounds=run["rounds"], seed=1)["S"], 3))
+# bg.play_history plays each recorded question on the pair it really got
+measured = bg.play_history(strategy, run, seed=1)
+print("S, as measured in those rounds:", round(measured["S"], 3))
 # With a few hundred rounds the measured S wobbles by about +/- 0.15. Try other seeds!
+# measured["history"] has every round: when it was asked, the pair's age, x, y, a, b and whether it won.
 bg.plot_network(net, highlight=run["path"])
 plt.show()
 

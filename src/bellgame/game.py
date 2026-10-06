@@ -19,6 +19,7 @@ import inspect
 
 import numpy as np
 
+from .qubits import bell_diagonal
 from .strategies import check_strategy, measurement_projectors
 
 CLASSICAL_WIN_RATE = 0.75
@@ -313,6 +314,7 @@ def play_chsh(strategy, source, rounds=None, seed=None):
     Returns a dict with ``win_rate``, ``S``, the correlations ``E``, and the
     probability ``table``. With ``rounds=N`` it also has ``counts`` and ``wins``.
     When the source reports a herald or pair rate, that is passed through too.
+    To play a network run's own rounds one at a time instead, use ``bg.play_history``.
 
     Example:
         >>> import bellgame as bg
@@ -333,4 +335,54 @@ def play_chsh(strategy, source, rounds=None, seed=None):
         for key in ("coincidence_prob", "rounds_hz", "fidelity"):
             if key in source:
                 result[key] = source[key]
+    return result
+
+
+def play_history(strategy, run, seed=None):
+    """Play each question of a network run as its own round, on the pair it actually used.
+
+    ``bg.play_chsh(strategy, run)`` uses the run's average state, which gives the
+    exact win rate. This plays the recorded rounds one by one instead: the referee
+    flips its coins, and the players measure the pair that question got, in the
+    state it had decayed to. So you can ask questions an average can't answer,
+    like whether old pairs lose more often.
+
+    Questions without a pair are skipped when the run used ``no_pair="discard"``,
+    and answered at random with ``no_pair="random"``.
+
+    Returns the same dict as ``bg.summarize_counts``, plus ``history``: the run's
+    history (``t_ms``, ``had_pair``, ``age_ms``, ``weights``) with, for every
+    question, ``x``, ``y``, ``a``, ``b`` (-1 when not played), ``played`` and ``win``.
+
+    Example:
+        >>> import bellgame as bg
+        >>> run = bg.run_network(bg.two_player_network(5), "Alice", "Bob", sim_time_s=0.2, seed=1)
+        >>> result = play_history(bg.optimal_strategy(), run, seed=1)
+        >>> result["rounds"] == run["rounds"]
+        True
+    """
+    if not isinstance(run, dict) or "history" not in run:
+        raise ValueError("play_history needs the dict returned by bg.run_network")
+    h = run["history"]
+    n = len(h["t_ms"])
+    rng = np.random.default_rng(seed)
+    x, y = rng.integers(0, 2, size=(2, n))
+    played = np.array(h["had_pair"], dtype=bool)
+    weights = np.where(played[:, None], h["weights"], 0.25)  # no pair: random answers
+    if run.get("no_pair", "discard") == "random":
+        played = np.ones(n, dtype=bool)
+    if not played.any():
+        raise ValueError("no question in this run had a pair to play on")
+    # a table is linear in the state, so each round's table mixes the four Bell states' tables
+    bell_tables = np.stack([table_from_state(strategy, bell_diagonal(np.eye(4)[k])) for k in range(4)])
+    probs = np.einsum("nk,kabn->nab", weights, bell_tables[:, :, :, x, y]).reshape(n, 4)
+    probs /= probs.sum(axis=1, keepdims=True)
+    outcome = np.minimum((rng.random(n)[:, None] > np.cumsum(probs, axis=1)).sum(axis=1), 3)
+    a, b = np.where(played, outcome // 2, -1), np.where(played, outcome % 2, -1)
+    win = played & ((a ^ b) == (x & y))
+    counts = {(i, j): {"00": 0, "01": 0, "10": 0, "11": 0} for i in (0, 1) for j in (0, 1)}
+    for i, j, ai, bi in zip(x[played], y[played], a[played], b[played]):
+        counts[int(i), int(j)][f"{ai}{bi}"] += 1
+    result = summarize_counts(counts)
+    result["history"] = {**h, "x": x, "y": y, "a": a, "b": b, "played": played, "win": win}
     return result
