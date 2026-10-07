@@ -22,24 +22,24 @@ jobs:
         run: uv sync --locked
 
       - name: Lint
-        run: uv run ruff check src tests labs examples students
+        run: uv run ruff check src tests tutorial examples projects
 
       - name: Tests (including docstring examples)
         run: uv run pytest
 
-      - name: Run every lab and example top to bottom
+      - name: Run every tutorial and example top to bottom
         run: |
           set -e
-          for script in labs/*.py examples/*.py students/_template/*.py; do
+          for script in tutorial/*.py examples/*.py projects/_template/*.py; do
             echo "::group::$script"
             uv run python "$script"
             echo "::endgroup::"
           done
 
-      - name: Labs open as notebooks
+      - name: Tutorial opens as notebooks
         run: |
           set -e
           mkdir -p /tmp/notebooks
-          for lab in labs/*.py; do
-            uv run jupytext --to ipynb -o "/tmp/notebooks/$(basename "$lab" .py).ipynb" "$lab"
+          for part in tutorial/*.py; do
+            uv run jupytext --to ipynb -o "/tmp/notebooks/$(basename "$part" .py).ipynb" "$part"
           done

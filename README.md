@@ -26,16 +26,16 @@ uv sync
 That creates `.venv/` with Python 3.13, bellgame, SeQUeNCe, numpy, scipy,
 matplotlib, Jupyter, and the Spyder kernel.
 
-Run a lab or example:
+Run a part of the tutorial, or an example:
 
 ```
-uv run python labs/01_classical_game.py
+uv run python tutorial/01_classical_game.py
 uv run python examples/two_star_network.py
 ```
 
 ### Jupyter
 
-The labs are plain Python files with `# %%` cells. To open one as a notebook:
+The tutorial and examples are plain Python files with `# %%` cells. To open one as a notebook:
 
 ```
 uv run jupyter lab
@@ -100,12 +100,88 @@ makes a table; the game reads the table.
 to simulate a finite experiment. For a network run, `rounds=run["rounds"]` is the
 experiment the network actually delivered.
 
-## Labs
+## Build a network
+
+A network is a plain dict of nodes (quantum routers with memories) and fiber
+links, every parameter at its default (`bg.DEFAULTS`). There are several ways to
+make one; the last four below build exactly the same Alice–Repeater–Bob chain.
+
+```python
+import networkx as nx
+import numpy as np
+import bellgame as bg
+
+# Ready-made shapes
+net = bg.two_player_network(distance_km=20)                  # Alice -- Bob
+net = bg.star("Hub", ["A", "B", "C"], leaf_km=5)              # every leaf linked to Hub
+net = bg.two_star("HubA", ["A1", "A2"], "HubB", ["B1", "B2"], leaf_km=5, hub_km=20)
+
+# Node by node
+net = bg.empty_network()
+for name in ["Alice", "Repeater", "Bob"]:
+    bg.add_node(net, name)
+bg.connect(net, "Alice", "Repeater", 10)                      # km
+bg.connect(net, "Repeater", "Bob", 15)
+
+# A list of (node, node, km)
+net = bg.from_edges([("Alice", "Repeater", 10), ("Repeater", "Bob", 15)])
+
+# A symmetric distance matrix in km (0 or np.inf = no link)
+dist_km = np.array([[0, 10, 0],
+                    [10, 0, 15],
+                    [0, 15, 0]])
+net = bg.from_matrix(["Alice", "Repeater", "Bob"], dist_km)
+
+# A networkx graph with a `length` (km) on each edge
+G = nx.Graph()
+G.add_edge("Alice", "Repeater", length=10)
+G.add_edge("Repeater", "Bob", length=15)
+net = bg.from_networkx(G)
+```
+
+`from_networkx` also accepts graphs from SeQUeNCe's builders in
+`sequence.utils.graphs` (their `attenuation` becomes `loss_db_per_km`). To go
+back, `bg.to_matrix(net)` and `bg.to_networkx(net)`; to draw it, `bg.plot_network(net)`.
+
+Change knobs with `set_node` and `set_link`; `bg.parameters(net)` prints every
+knob with its unit and meaning.
+
+```python
+bg.set_node(net, coherence_time_ms=100)                       # every node
+bg.set_node(net, "Repeater", memory_size=20, gate_fidelity=0.99)
+bg.set_link(net, "Alice", "Repeater", raw_fidelity=0.95)
+bg.set_all_links(net, detector_efficiency=0.9)
+```
+
+## Run a simulation
+
+`bg.run_network` simulates the network in SeQUeNCe while a referee asks Alice
+and Bob questions, then hands back the pairs they used. Play the game on it like
+any other source:
+
+```python
+run = bg.run_network(net, "Alice", "Bob", sim_time_s=0.5, seed=1)
+print(run["path"])                                            # ['Alice', 'Repeater', 'Bob']
+print(run["questions_hz"], run["pairs_hz"], run["rounds_hz"]) # ~1000, ~3990, ~990 per second
+print(run["fidelity"], run["pair_age_ms"])                    # ~0.91, ~0.75 ms
+
+result = bg.play_chsh(bg.optimal_strategy(), run)             # exact, from the average pair
+print(result["win_rate"], result["S"])                        # ~0.81, ~2.48
+
+finite = bg.play_chsh(bg.optimal_strategy(), run, rounds=run["rounds"], seed=1)
+```
+
+`run["links"]` and `run["nodes"]` give each link's pair rate and each node's swap
+and memory-expiry rates; `bg.play_history(strategy, run)` replays the rounds one
+by one. The same `seed` gives the same run. A sweep is a loop over this: see
+`examples/distance_sweep.py` and `examples/two_star_network.py`.
+
+## Tutorial
 
 Step-by-step notebooks (plain Python files with `# %%` cells), from the
-classical game to networks.
+classical game to networks. Work through them in order.
 
-| Lab | Topic |
+| Part | Topic |
 |---|---|
 | 01 classical game | no classical team beats 75% |
 | 02 many rounds | finite experiments only estimate probabilities |
@@ -118,11 +194,14 @@ classical game to networks.
 
 ## Examples
 
+Short, self-contained scripts, one per part of bellgame: a reference for how
+to use it.
+
 | Example | What it shows |
 |---|---|
 | `distance_sweep.py` | S and rate against distance, over a network and over a bare photonic link |
 | `two_star_network.py` | two swaps across a two-star network; sweeps of hub distance, memories and gate quality |
-| `classical_strategies.py` | coins, shared randomness and memory don't beat 75%; a predictable referee does |
+| `classical_strategies.py` | coins, shared randomness and memory don't beat 75%; a predictable referee does; quantum rounds over a network, by pair age (`play_history`) |
 | `optimizer_comparison.py` | scipy optimizers undoing a polarization twist |
 | `e91_key.py` | key rate from a network run |
 
@@ -164,7 +243,7 @@ classical game to networks.
   decides how often pairs appear). Swaps twirl pairs into Werner form
   (SeQUeNCe's default). Polarization twists act on the delivered pair, at the players.
 * `no_click="discard"` (the default) keeps only rounds where both sides click:
-  the fair-sampling assumption. Lab 05 shows what happens without it.
+  the fair-sampling assumption. Tutorial 05 shows what happens without it.
 
 ## Using SeQUeNCe and scipy directly
 
@@ -172,14 +251,14 @@ classical game to networks.
 run it yourself, do so inside `with bg.bell_diagonal_mode():`, which sets
 SeQUeNCe's protocols the way bellgame uses them and puts them back afterwards.
 `bg.chsh_objective(source)` is an ordinary function you can pass to
-`scipy.optimize.minimize`. Labs 06 and 08 show both.
+`scipy.optimize.minimize`. Tutorial parts 06 and 08 show both.
 
 ## Layout
 
 ```
 src/bellgame/   the package (import bellgame as bg)
-labs/           step-by-step notebooks
-examples/       worked studies (sweeps, two-star network, classical strategies, optimizers, E91)
-students/       one folder per contributor (copy students/_template)
+tutorial/       step-by-step notebooks, in order
+examples/       short reference scripts, one per part of bellgame (sweeps, two-star, E91, ...)
+projects/       studies that build to a conclusion, one folder each (copy projects/_template)
 tests/          pytest tests: uv run pytest
 ```

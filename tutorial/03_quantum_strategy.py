@@ -1,5 +1,5 @@
 # %% [markdown]
-# # Lab 03: The quantum strategy
+# # Tutorial 03: The quantum strategy
 #
 # **Python skill:** dictionaries.
 # **Physics idea:** entangled photons let Alice and Bob win 85.4% of the time.

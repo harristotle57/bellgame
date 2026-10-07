@@ -1,5 +1,5 @@
 # %% [markdown]
-# # Lab 05: Parameter studies
+# # Tutorial 05: Parameter studies
 #
 # **Python skill:** sweeping a parameter with a loop and plotting with matplotlib.
 # **Physics idea:** every imperfection costs you; and how you treat missed photons can fake a result.

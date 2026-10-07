@@ -1,5 +1,5 @@
 # %% [markdown]
-# # Lab 08: Playing over a quantum network
+# # Tutorial 08: Playing over a quantum network
 #
 # **Python skill:** building nested dicts and numpy matrices.
 # **Physics idea:** a network has to *deliver* a pair before every question, and
@@ -90,7 +90,7 @@ plt.show()
 # * `"fixed"`: every pair has fidelity `raw_fidelity`, no matter how long the fiber
 # * `"analytic"` (the default): the same, but dark counts fake some heralds, and
 #   that matters more when fewer real photons survive a long fiber
-# * `"fock"`: a full photon-by-photon simulation of the source (see Lab 04),
+# * `"fock"`: a full photon-by-photon simulation of the source (see tutorial 04),
 #   including the source sometimes making two pairs at once
 #
 # **Your turn:** predict which model gives the highest S here, then check.

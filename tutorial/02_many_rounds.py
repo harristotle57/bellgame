@@ -1,10 +1,10 @@
 # %% [markdown]
-# # Lab 02: Playing many rounds
+# # Tutorial 02: Playing many rounds
 #
 # **Python skill:** loops and lists.
 # **Physics idea:** an experiment only *estimates* a probability; more rounds means a better estimate.
 #
-# In lab 01 bellgame computed the exact win rate. A real experiment plays a
+# In tutorial 01 bellgame computed the exact win rate. A real experiment plays a
 # finite number of rounds, so the measured win rate wobbles.
 
 # %%

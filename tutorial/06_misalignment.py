@@ -1,5 +1,5 @@
 # %% [markdown]
-# # Lab 06: Misalignment and optimization
+# # Tutorial 06: Misalignment and optimization
 #
 # **Python skill:** passing a function to another function (`scipy.optimize.minimize`).
 # **Physics idea:** fiber twists polarization; you can undo it if you can find the right correction.

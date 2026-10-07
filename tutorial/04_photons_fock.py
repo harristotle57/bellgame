@@ -1,5 +1,5 @@
 # %% [markdown]
-# # Lab 04: Photons as Fock modes
+# # Tutorial 04: Photons as Fock modes
 #
 # **Python skill:** numpy arrays (shape, indexing, sums).
 # **Physics idea:** a real photon source doesn't make exactly one pair. Sometimes it makes none, sometimes two.

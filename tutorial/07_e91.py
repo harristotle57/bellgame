@@ -1,5 +1,5 @@
 # %% [markdown]
-# # Lab 07: E91, a secret key from entanglement
+# # Tutorial 07: E91, a secret key from entanglement
 #
 # **Python skill:** working with lists of bits (comparing, counting, slicing).
 # **Physics idea:** the same Bell test that wins the CHSH game also proves a key is secret.

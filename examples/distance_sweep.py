@@ -47,7 +47,7 @@ plt.show()
 # and throw the rest away). What happens to the 10 ms curve, and why?
 #
 # **Part 2: photons alone, no memories.** Here a source in the middle shoots
-# photon pairs straight at Alice's and Bob's detectors (the Fock model, see Lab
+# photon pairs straight at Alice's and Bob's detectors (the Fock model, see tutorial
 # 04). Without memories nothing waits, so we can go much further, until dark
 # counts, false clicks, swamp the few real photons.
 

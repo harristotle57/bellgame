@@ -1,5 +1,5 @@
 # %% [markdown]
-# # Lab 01: The CHSH game, played classically
+# # Tutorial 01: The CHSH game, played classically
 #
 # **Python skill:** writing and calling functions.
 # **Physics idea:** a game that no classical team can win more than 75% of the time.
@@ -75,4 +75,4 @@ print("best classical win rate:", best)
 # `examples/classical_strategies.py`. While the referee's questions are fair coin
 # flips, the past says nothing about this round's questions. The only way past
 # 75% is a referee whose questions can be predicted.
-# Keep this number in mind: quantum players will beat it in lab 03.
+# Keep this number in mind: quantum players will beat it in tutorial 03.

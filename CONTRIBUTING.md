@@ -1,16 +1,16 @@
 # Contributing
 
-## Your own folder and branch
+## Your project folder and branch
 
 ```
 git checkout -b <your-name>
-cp -r students/_template students/<your-name>
+cp -r projects/_template projects/<project-name>
 ```
 
 Commit your work on your branch as often as you like:
 
 ```
-git add students/<your-name>
+git add projects/<project-name>
 git commit -m "Sweep detector efficiency"
 git push -u origin <your-name>
 ```
@@ -36,7 +36,7 @@ a new protocol), move it into `src/bellgame/`.
 
    ```
    uv run pytest
-   uv run ruff check src tests
+   uv run ruff check src tests tutorial examples projects
    ```
 
 6. Open a pull request from your branch.
@@ -44,6 +44,6 @@ a new protocol), move it into `src/bellgame/`.
 ## Running everything
 
 ```
-uv run pytest                              # tests, including the docstring examples
-uv run python labs/05_parameter_studies.py # any lab or example
+uv run pytest                                  # tests, including the docstring examples
+uv run python tutorial/05_parameter_studies.py # any tutorial part or example
 ```
