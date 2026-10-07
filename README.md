@@ -204,6 +204,7 @@ to use it.
 | `classical_strategies.py` | coins, shared randomness and memory don't beat 75%; a predictable referee does; quantum rounds over a network, by pair age (`play_history`) |
 | `optimizer_comparison.py` | scipy optimizers undoing a polarization twist |
 | `e91_key.py` | key rate from a network run |
+| `eavesdropper.py` | an intercept-resend Eve against E91: which angle she should pick, why she can't learn the bases, and how much key survives |
 
 ## The physics model, and its assumptions
 
