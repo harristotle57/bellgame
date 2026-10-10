@@ -45,5 +45,5 @@ a new protocol), move it into `src/bellgame/`.
 
 ```
 uv run pytest                                  # tests, including the docstring examples
-uv run python tutorial/05_parameter_studies.py # any tutorial part or example
+uv run python tutorial/05_key_rate.py         # any tutorial part or example
 ```
