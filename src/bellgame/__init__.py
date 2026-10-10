@@ -46,6 +46,7 @@ from .link import (
 from .network import (
     add_node,
     connect,
+    disconnect,
     empty_network,
     from_edges,
     from_matrix,
@@ -55,6 +56,7 @@ from .network import (
     node_names,
     node_params,
     parameters,
+    remove_node,
     set_all_links,
     set_link,
     set_node,

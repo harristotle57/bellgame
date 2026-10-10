@@ -1,3 +1,5 @@
+import copy
+
 import networkx as nx
 import numpy as np
 import pytest
@@ -81,6 +83,74 @@ def test_set_link_and_node():
         bg.set_link(net, "A1", "HubA", link_model="magic")
     with pytest.raises(ValueError, match="memory_errors"):
         bg.set_node(net, "A1", memory_errors=[1, 1, 1])
+
+
+def test_failed_edits_leave_the_network_unchanged():
+    net = builder_net()
+    before = copy.deepcopy(net)
+    with pytest.raises(ValueError, match="raw_fidelity"):
+        bg.set_link(net, "HubA", "A1", detector_efficiency=0.5, raw_fidelity=2)
+    with pytest.raises(ValueError, match="not a node parameter"):
+        bg.set_node(net, coherence_time_ms=5, colour="red")
+    with pytest.raises(ValueError, match="distance_km"):
+        bg.connect(net, "A1", "B1", -1)
+    with pytest.raises(ValueError, match="already a node"):
+        bg.star("New", ["A1"], net=net)
+    assert net == before
+    bg.set_link(net, "HubA", "A1", detector_efficiency=0.5)  # the failed changes left nothing behind
+
+
+def test_copy_leaves_the_original_alone():
+    net = builder_net()
+    before = copy.deepcopy(net)
+    changed = bg.set_node(net, memory_errors=[1, 0, 0], copy=True)
+    changed = bg.remove_node(bg.disconnect(changed, "HubA", "HubB", copy=True), "B1", copy=True)
+    assert net == before
+    assert "B1" not in bg.node_names(changed) and ("HubA", "HubB") not in bg.links(changed)
+    assert bg.node_params(changed, "A1")["memory_errors"] == [1, 0, 0]
+    nodes = changed["nodes"]
+    assert nodes["A1"]["memory_errors"] is not nodes["A2"]["memory_errors"]  # each node gets its own list
+
+
+def test_remove_node_drops_its_links():
+    net = bg.remove_node(builder_net(), "HubB")
+    assert bg.links(net) == [("HubA", "A1"), ("HubA", "A2"), ("HubA", "A3")]
+    with pytest.raises(ValueError, match="no link"):
+        bg.disconnect(net, "A1", "A2")
+
+
+def test_values_are_stored_as_floats_and_ints():
+    net = bg.set_node(builder_net(), "A1", memory_size=np.float64(4.0), coherence_time_ms=np.int64(5),
+                      memory_errors=np.array([0, 0, 1]))
+    p = bg.node_params(net, "A1")
+    assert type(p["memory_size"]) is int and type(p["coherence_time_ms"]) is float
+    assert p["memory_errors"] == [0.0, 0.0, 1.0] and all(type(x) is float for x in p["memory_errors"])
+    with pytest.raises(ValueError, match="whole number"):
+        bg.set_node(net, memory_size=1.5)
+    with pytest.raises(ValueError, match="True or False"):
+        bg.set_link(net, "HubA", "A1", heralded="no")
+
+
+@pytest.mark.parametrize("change", [
+    lambda net: bg.connect(net, "A1", "B1", np.nan),
+    lambda net: bg.set_link(net, "HubA", "A1", detector_efficiency=np.nan),
+    lambda net: bg.set_node(net, coherence_time_ms=float("nan")),
+    lambda net: bg.set_node(net, "A1", memory_errors=[np.nan, 0, 1]),
+])
+def test_nan_is_always_refused(change):
+    with pytest.raises(ValueError, match="NaN"):
+        change(builder_net())
+
+
+def test_ranges_are_checked():
+    net = builder_net()
+    with pytest.raises(ValueError, match=r"detector_efficiency must be in \[0, 1\]"):
+        bg.set_all_links(net, detector_efficiency=7)
+    with pytest.raises(ValueError, match="gate_fidelity"):
+        bg.set_node(net, gate_fidelity=3)
+    with pytest.raises(ValueError, match="distance_km"):
+        bg.from_edges([("A", "B", np.inf)])
+    bg.set_node(net, coherence_time_ms=np.inf)  # a perfect memory is allowed
 
 
 def test_to_sequence_gives_topology_with_link_states():
