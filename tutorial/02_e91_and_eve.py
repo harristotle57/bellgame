@@ -84,7 +84,7 @@ for i, (n, color) in enumerate(zip(sizes, colors)):
 bg.reference_lines(ax, "S")
 ax.set_xticks(range(len(sizes)), [f"{n:,} pairs" for n in sizes])
 ax.set_ylabel("measured S, +- one sigma")
-ax.set_title("20 runs of E91 on a perfect pair at each size", color=bg.plots.TEXT, fontsize=10, loc="left")
+ax.set_title("20 runs of E91 on a perfect pair at each size", color=bg.plots.TEXT, fontsize=11, loc="left")
 ax.spines[["top", "right"]].set_visible(False)
 plt.show()
 
@@ -210,6 +210,7 @@ per_f = eve_qber[-1] / fs[-1]
 top = ax.secondary_xaxis("top", functions=(lambda q: q / 100 / per_f, lambda f: 100 * per_f * f))
 top.set_xlabel("fraction of pairs Eve taps, f (Eve's curve)")
 ax.legend(frameon=False, loc="lower left", bbox_to_anchor=(0, 0.08))
+ax.set_title("S tells Eve from noise; the QBER alone can't", color=bg.plots.TEXT, fontsize=11, loc="left")
 ax.spines[["right"]].set_visible(False)
 plt.show()
 

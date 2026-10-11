@@ -97,7 +97,7 @@ ax.bar_label(bars, [f"{r:.0f}/s" for r in rates], padding=3, fontsize=8, color=b
 ax.set_yticks(range(len(stages)), labels)
 ax.invert_yaxis()
 ax.set_xlabel("per second")
-ax.set_title("From links to key", color=bg.plots.TEXT, fontsize=10, loc="left")
+ax.set_title("From links to key", color=bg.plots.TEXT, fontsize=11, loc="left")
 ax.legend(handles=[plt.matplotlib.patches.Patch(color=c, label=name)
                    for name, c in [("network", "#52514e"), ("players", "#2a78d6"), ("key", "#e34948")]],
           frameon=False, loc="lower right")
@@ -151,6 +151,7 @@ ax.annotate(f"perfect\nmemories\n{no_decay:.3f}", xy=(1, no_decay), xycoords=("a
             color=bg.plots.TEXT_SECONDARY, annotation_clip=False)
 ax.set_xlabel("pair age when measured (ms)")
 ax.set_ylabel("fidelity")
+ax.set_title("Older pairs are worse", color=bg.plots.TEXT, fontsize=11, loc="left")
 ax.legend(frameon=False, loc="upper right")
 ax.spines[["top", "right"]].set_visible(False)
 plt.show()
@@ -225,6 +226,8 @@ fig, (ax_frac, ax_s) = plt.subplots(2, 1, figsize=(7, 5.5), sharex=True, layout=
 ax_frac.plot(asked_hz, 100 * fraction, color="#52514e", linewidth=2, marker="o")
 ax_frac.set_ylabel("rounds with\na pair (%)")
 ax_frac.set_ylim(0, 105)
+ax_frac.set_title("Ask faster than the network delivers, and guessing costs S", color=bg.plots.TEXT,
+                  fontsize=11, loc="left")
 ax_s.plot(asked_hz, s_discard, color="#2a78d6", linewidth=2, marker="s", label='no_pair="discard"')
 ax_s.plot(asked_hz, s_random, color="#e34948", linewidth=2, marker="o", label='no_pair="random"')
 bg.reference_lines(ax_s, "S")

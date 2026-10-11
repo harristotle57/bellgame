@@ -55,7 +55,7 @@ strategy = bg.optimal_strategy()
 print(strategy)
 ax = bg.plot_angles(strategy)
 ax.set_title("Optimal CHSH strategy\nPolarizer angles (H = 0 deg, V = 90 deg)",
-             color=bg.plots.TEXT, fontsize=10, loc="left")
+             color=bg.plots.TEXT, fontsize=11, loc="left")
 plt.show()
 
 result = bg.play_chsh(strategy, bg.bell_pair())
@@ -63,7 +63,7 @@ print("win rate:", round(result["win_rate"], 4), " S:", round(result["S"], 4))
 print("Tsirelson bound:", round(bg.TSIRELSON_WIN_RATE, 4), " S =", round(bg.TSIRELSON_S, 4))
 ax = bg.plot_correlations(result)
 ax.set_title(f"Correlations E(x, y)    S = {result['S']:.3f}, win rate = {result['win_rate']:.1%}\n"
-             "(classical limit 2 / 75%, quantum limit 2.83 / 85.4%)", color=bg.plots.TEXT, fontsize=10, loc="left")
+             "(classical limit 2 / 75%, quantum limit 2.83 / 85.4%)", color=bg.plots.TEXT, fontsize=11, loc="left")
 plt.show()
 
 # %% [markdown]
@@ -87,7 +87,7 @@ s_values = {n: [bg.play_chsh(strategy, bg.bell_pair(), rounds=n, seed=k)["S"] fo
 # Shared bins, so a tighter spread shows up as a taller peak
 all_s = np.concatenate(list(s_values.values()))
 bins = np.arange(np.floor(all_s.min() * 50) / 50, all_s.max() + 0.02, 0.02)
-fig, ax = plt.subplots(figsize=(7, 4))
+fig, ax = plt.subplots(figsize=(7, 4), layout="constrained")
 for (n, s), color in zip(s_values.items(), colors):
     print(f"{n:6,} rounds: S = {np.mean(s):.3f} +- {np.std(s):.3f}")
     weights = np.full(experiments, 1 / experiments)
@@ -102,6 +102,8 @@ top = ax.secondary_xaxis("top", functions=(lambda s: 0.5 + s / 8, lambda w: 8 * 
 top.xaxis.set_major_formatter(plt.matplotlib.ticker.PercentFormatter(xmax=1, decimals=0))
 top.set_xlabel("win rate (= 1/2 + S/8)")
 ax.legend(frameon=False, loc="upper left")
+ax.set_title(f"Measured S in {experiments:,} experiments at each size", color=bg.plots.TEXT, fontsize=11,
+             loc="left")
 plt.show()
 
 # %% [markdown]

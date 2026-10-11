@@ -62,7 +62,7 @@ ax_s.plot(s_path, color=bg.plots.TEXT, linewidth=2)
 ax_s.plot(snapshots, s_path[snapshots], "o", color=bg.plots.TEXT)
 bg.reference_lines(ax_s, "S")
 ax_s.set_ylabel("S")
-ax_s.set_title("Exact search: Nelder-Mead, one step at a time", color=bg.plots.TEXT, fontsize=10, loc="left")
+ax_s.set_title("Exact search: Nelder-Mead, one step at a time", color=bg.plots.TEXT, fontsize=11, loc="left")
 for k, (label, color, marker) in enumerate(angle_styles):
     ax_a.plot(path[:, k], color=color, linewidth=2, label=label)
     ax_a.plot(snapshots, path[snapshots, k], marker, color=color)
@@ -113,7 +113,7 @@ bg.reference_lines(ax_s, "S")
 ax_s.set_ylim(1.5, 3.2)
 ax_s.set_ylabel("S")
 ax_s.legend(frameon=False, loc="lower right", fontsize=8)
-ax_s.set_title(f"Noisy search: {rounds:,} rounds per try", color=bg.plots.TEXT, fontsize=10, loc="left")
+ax_s.set_title(f"Noisy search: {rounds:,} rounds per try", color=bg.plots.TEXT, fontsize=11, loc="left")
 for k, (label, color, marker) in enumerate(angle_styles):
     ax_a.plot(tries, tried[:, k], marker, color=color, markersize=3, label=label)
 ax_a.axvline(best, color="#e34948", linewidth=1, linestyle=":")
@@ -155,8 +155,8 @@ print(f"left over: about {np.degrees(np.arcsin(np.sqrt(after['qber']))):.1f} deg
 fig, (ax_before, ax_after) = plt.subplots(1, 2, figsize=(9, 3.6), layout="constrained")
 bg.plot_correlations(bg.play_chsh(bg.optimal_strategy(), twisted_pair), ax=ax_before)
 bg.plot_correlations(bg.play_chsh(found["strategy"], twisted_pair), ax=ax_after)
-ax_before.set_title(f"Before alignment: S = {e['S']:.3f}", color=bg.plots.TEXT, fontsize=10, loc="left")
-ax_after.set_title(f"After alignment: S = {after['S']:.3f}", color=bg.plots.TEXT, fontsize=10, loc="left")
+ax_before.set_title(f"Before alignment: S = {e['S']:.3f}", color=bg.plots.TEXT, fontsize=11, loc="left")
+ax_after.set_title(f"After alignment: S = {after['S']:.3f}", color=bg.plots.TEXT, fontsize=11, loc="left")
 plt.show()
 
 # %% [markdown]
@@ -240,7 +240,7 @@ fig, (ax_q, ax_e, ax_s) = plt.subplots(3, 1, figsize=(7, 8), sharex=True, layout
 ax_q.plot(100 * eve_qber, color="#e34948", linewidth=2)
 ax_q.set_ylabel("QBER Alice and\nBob measure (%)")
 ax_q.set_title(f"Each step is one setting of Eve's wave plates (she taps {f_eve:.0%} of pairs)",
-               color=bg.plots.TEXT, fontsize=10, loc="left")
+               color=bg.plots.TEXT, fontsize=11, loc="left")
 ax_e.plot(100 * eve_wrong, color="#52514e", linewidth=2, label="on the key rounds she taps")
 # On the key rounds she doesn't tap, she can only guess: wrong half the time
 ax_e.plot(100 * (f_eve * eve_wrong + (1 - f_eve) * 0.5), color="#52514e", linewidth=2, linestyle="--",
