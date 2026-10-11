@@ -16,7 +16,7 @@ import bellgame as bg
 twist = bg.random_misalignment(seed=4)
 print("hidden twist (degrees):", twist)
 twisted_pair = bg.misaligned_source(bg.bell_pair(), twist)
-print("S with the twist:", round(bg.play_chsh(bg.optimal_strategy(), twisted_pair)["S"], 3))
+print("S with the twist:", round(bg.play(bg.optimal_strategy(), twisted_pair)["S"], 3))
 
 # %% [markdown]
 # Alice can put three wave plates in front of her polarizer: three correction

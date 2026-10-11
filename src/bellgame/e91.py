@@ -53,7 +53,7 @@ def basis_pair_table(source, alice_deg, bob_deg, corrections=None):
 def run_e91(source, rounds=10000, seed=None, settings=None, corrections=None):
     """Run E91 on a source of entangled pairs.
 
-    * ``source``: anything ``bg.play_chsh`` accepts (a 4x4 state, a link, a path result)
+    * ``source``: anything ``bg.play`` accepts (a 4x4 state, a link, a path result)
     * ``rounds``: number of pairs measured; ``None`` gives the exact expected values
     * ``settings``: the angles and pairings (default ``bg.E91_SETTINGS``)
     * ``corrections``: e.g. ``{"alice_correction": [a, b, c]}`` from ``bg.find_alignment``

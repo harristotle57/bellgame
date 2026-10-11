@@ -25,7 +25,7 @@ for i, (label, coherence_ms) in enumerate(memories.items()):
         rates.append(run["rounds_hz"])
         if run["rounds"] >= 20:  # too few rounds: no meaningful S
             kms.append(km)
-            results.append(bg.play_chsh(strategy, run))
+            results.append(bg.play(strategy, run))
     bg.plot_sweep(kms, results, metric="S", ax=ax_s, label=label, xlabel="distance (km)")
     ax_rate.semilogy(distances, rates, color=bg.plots.SERIES[i], linewidth=2, marker="o", label=label)
 ax_rate.set_xlabel("distance (km)")
@@ -58,7 +58,7 @@ repetition_rate_hz = 1e8   # source pulses per second
 
 fig, (ax_s, ax_rate) = plt.subplots(1, 2, figsize=(12, 4))
 for i, (label, dark) in enumerate(detectors.items()):
-    results = [bg.play_chsh(strategy, bg.link(distance_km=d, dark_count_rate_hz=dark)) for d in distances]
+    results = [bg.play(strategy, bg.link(distance_km=d, dark_count_rate_hz=dark)) for d in distances]
     bg.plot_sweep(distances, results, metric="S", ax=ax_s, label=label, xlabel="distance (km)")
     ax_rate.semilogy(distances, [r["coincidence_prob"] * repetition_rate_hz for r in results],
                      color=bg.plots.SERIES[i], linewidth=2, label=label)

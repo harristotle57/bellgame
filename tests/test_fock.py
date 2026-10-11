@@ -8,7 +8,7 @@ IDEAL = dict(distance_km=0, mean_photon_number=1e-5, detector_efficiency=1.0, da
 
 
 def s_of(**changes):
-    return bg.play_chsh(bg.optimal_strategy(), bg.link(**changes))["S"]
+    return bg.play(bg.optimal_strategy(), bg.link(**changes))["S"]
 
 
 def test_ideal_limit_reaches_tsirelson():
@@ -49,8 +49,8 @@ def test_single_photon_rotation_matches_qubit_rotation():
 
 
 def test_loss_lowers_coincidences():
-    near = bg.play_chsh(bg.optimal_strategy(), bg.link(distance_km=0))["coincidence_prob"]
-    far = bg.play_chsh(bg.optimal_strategy(), bg.link(distance_km=50))["coincidence_prob"]
+    near = bg.play(bg.optimal_strategy(), bg.link(distance_km=0))["coincidence_prob"]
+    far = bg.play(bg.optimal_strategy(), bg.link(distance_km=50))["coincidence_prob"]
     assert far == pytest.approx(near * fock.fiber_transmissivity(50, 0.2), rel=0.05)
 
 

@@ -44,8 +44,8 @@ def test_analytic_dark_counts_hurt_long_links():
 def test_fock_weights_reproduce_link_correlations():
     params = bg.link(distance_km=20, mean_photon_number=0.05)
     weights, _ = bg.fock_pair_weights(params)
-    s_direct = bg.play_chsh(bg.optimal_strategy(), params)["S"]
-    s_weights = bg.play_chsh(bg.optimal_strategy(), bg.bell_diagonal(weights))["S"]
+    s_direct = bg.play(bg.optimal_strategy(), params)["S"]
+    s_weights = bg.play(bg.optimal_strategy(), bg.bell_diagonal(weights))["S"]
     # SeQUeNCe stores only the Bell-diagonal part; the tiny rest (from double clicks) is dropped
     assert np.isclose(s_direct, s_weights, atol=1e-3)
 
@@ -103,7 +103,7 @@ def test_memory_decay_lowers_s():
         net = bg.two_player_network(20)
         bg.set_node(net, coherence_time_ms=coherence_ms)
         run = bg.run_network(net, "Alice", "Bob", questions_hz=200, sim_time_s=0.5, seed=1, pick="oldest")
-        s.append(bg.play_chsh(bg.optimal_strategy(), run)["S"])
+        s.append(bg.play(bg.optimal_strategy(), run)["S"])
     assert s[0] > s[1]
 
 
@@ -113,7 +113,7 @@ def test_missing_pairs_count_against_random_policy():
     guessed = bg.run_network(net, "Alice", "Bob", sim_time_s=0.2, seed=3, no_pair="random")
     assert kept["rounds"] < kept["questions"]
     strategy = bg.optimal_strategy()
-    assert bg.play_chsh(strategy, guessed)["S"] < bg.play_chsh(strategy, kept)["S"]
+    assert bg.play(strategy, guessed)["S"] < bg.play(strategy, kept)["S"]
 
 
 def test_unconnected_players_are_reported():
@@ -194,10 +194,10 @@ def test_history_has_one_entry_per_question(two_star_run):
     assert np.allclose(two_star_run["state"], h["states"][h["had_pair"]].mean(axis=0))
 
 
-def test_play_history_matches_the_average_state(two_star_run):
+def test_replay_matches_the_average_state(two_star_run):
     strategy = bg.optimal_strategy()
-    exact = bg.play_chsh(strategy, two_star_run)["win_rate"]
-    result = bg.play_history(strategy, two_star_run, seed=1)
+    exact = bg.play(strategy, two_star_run)["win_rate"]
+    result = bg.play(strategy, two_star_run, rounds="run", seed=1)
     assert result["rounds"] == two_star_run["rounds"]
     h = result["history"]
     assert np.all(h["a"][~h["played"]] == -1)
@@ -205,10 +205,26 @@ def test_play_history_matches_the_average_state(two_star_run):
     assert abs(result["win_rate"] - exact) < 4 * np.sqrt(exact * (1 - exact) / result["rounds"])
 
 
-def test_play_history_answers_missing_pairs_at_random():
+def test_replay_with_player_functions(two_star_run):
+    # the same rounds, played by functions instead of a strategy dict, each seeing its history
+    seen = []
+    alice, bob = bg.quantum_players(bg.optimal_strategy())
+
+    def counting_alice(x, history, qubit):
+        seen.append(len(history))
+        return alice(x, history, qubit)
+
+    exact = bg.play(bg.optimal_strategy(), two_star_run)["win_rate"]
+    result = bg.play((counting_alice, bob), two_star_run, rounds="run", seed=1)
+    assert result["rounds"] == two_star_run["rounds"] == len(seen)
+    assert seen == list(range(len(seen)))  # only played rounds count as history
+    assert abs(result["win_rate"] - exact) < 4 * np.sqrt(exact * (1 - exact) / result["rounds"])
+
+
+def test_replay_answers_missing_pairs_at_random():
     run = bg.run_network(bg.two_player_network(60), "Alice", "Bob", sim_time_s=0.2, seed=3, no_pair="random")
     assert run["rounds"] < run["questions"]
-    assert bg.play_history(bg.optimal_strategy(), run, seed=1)["rounds"] == run["questions"]
+    assert bg.play(bg.optimal_strategy(), run, rounds="run", seed=1)["rounds"] == run["questions"]
 
 
 def test_old_pairs_are_worse():
@@ -280,14 +296,14 @@ def test_run_with_no_rounds_has_no_state():
     run = bg.run_network(bg.two_player_network(100), "Alice", "Bob", questions_hz=1e5, sim_time_s=1e-4, seed=1)
     assert run["questions"] > 0 and run["rounds"] == 0
     assert np.all(np.isnan(run["state"])) and np.isnan(run["fidelity"])
-    assert np.isnan(bg.play_chsh(bg.optimal_strategy(), run)["S"])
+    assert np.isnan(bg.play(bg.optimal_strategy(), run)["S"])
     assert np.isnan(bg.run_e91(run, rounds=None)["S"])
     # sampled play has no pairs to play: 0 rounds and NaN results, nothing raises
-    sampled = bg.play_chsh(bg.optimal_strategy(), run, rounds=100, seed=1)
+    sampled = bg.play(bg.optimal_strategy(), run, rounds=100, seed=1)
     assert sampled["rounds"] == 0 and np.isnan(sampled["win_rate"]) and np.isnan(sampled["S"])
     key = bg.run_e91(run, rounds=100, seed=1)
     assert key["rounds"] == key["key_length"] == 0 and np.isnan(key["qber"]) and not key["secure"]
-    one_by_one = bg.play_history(bg.optimal_strategy(), run, seed=1)
+    one_by_one = bg.play(bg.optimal_strategy(), run, rounds="run", seed=1)
     assert one_by_one["rounds"] == 0 and np.isnan(one_by_one["S"])
 
 
@@ -304,9 +320,9 @@ def test_twisting_a_run_twists_every_round(two_star_run):
     twisted = bg.misaligned_source(two_star_run, {"alice": [0, 0, 0], "bob": [0, 40, 0]})
     h = twisted["history"]
     assert np.allclose(twisted["state"], h["states"][h["had_pair"]].mean(axis=0))
-    exact = bg.play_chsh(strategy, twisted)["win_rate"]
-    assert exact < bg.play_chsh(strategy, two_star_run)["win_rate"] - 0.1
-    played = bg.play_history(strategy, twisted, seed=1)
+    exact = bg.play(strategy, twisted)["win_rate"]
+    assert exact < bg.play(strategy, two_star_run)["win_rate"] - 0.1
+    played = bg.play(strategy, twisted, rounds="run", seed=1)
     assert abs(played["win_rate"] - exact) < 4 * np.sqrt(exact * (1 - exact) / played["rounds"])
 
 
@@ -314,4 +330,4 @@ def test_twisted_run_reports_its_own_fidelity(two_star_run):
     twisted = bg.misaligned_source(two_star_run, {"alice": [0, 0, 0], "bob": [0, 40, 0]})
     assert np.isclose(twisted["fidelity"], bg.fidelity(twisted["state"]))
     assert twisted["fidelity"] < two_star_run["fidelity"] - 0.2
-    assert bg.play_chsh(bg.optimal_strategy(), twisted)["fidelity"] == twisted["fidelity"]
+    assert bg.play(bg.optimal_strategy(), twisted)["fidelity"] == twisted["fidelity"]

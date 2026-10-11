@@ -20,7 +20,7 @@ distances = [0, 50, 100, 150, 200, 250]
 
 results = []
 for d in distances:
-    results.append(bg.play_chsh(strategy, bg.link(distance_km=d, dark_count_rate_hz=10_000)))
+    results.append(bg.play(strategy, bg.link(distance_km=d, dark_count_rate_hz=10_000)))
 
 ax = bg.plot_sweep(distances, results, metric="S", label="10 kHz dark counts", xlabel="distance (km)")
 plt.show()
@@ -53,7 +53,7 @@ for policy in ["discard", "zero", "random"]:
     for eta in efficiencies:
         link = bg.link(distance_km=0, mean_photon_number=1e-4, dark_count_rate_hz=0,
                        detector_efficiency=eta, heralded=True, no_click=policy)
-        rs.append(bg.play_chsh(strategy, link))
+        rs.append(bg.play(strategy, link))
     bg.plot_sweep(efficiencies, rs, metric="S", ax=ax, label=f"no_click = {policy}",
                   xlabel="detector efficiency")
 plt.show()

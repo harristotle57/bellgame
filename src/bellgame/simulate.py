@@ -11,7 +11,7 @@
    whatever state SeQUeNCe says it has decayed to. If they share none, the
    round has no pair.
 3. The result holds the **average state of the pairs the players used**.
-   Hand it to ``bg.play_chsh``, ``bg.run_e91`` or ``bg.find_alignment`` like
+   Hand it to ``bg.play``, ``bg.run_e91`` or ``bg.find_alignment`` like
    any other source. (The players' measurements don't change what the network
    does, and outcome probabilities are linear in the state, so this average
    gives exactly the statistics of playing every round.)
@@ -416,7 +416,7 @@ def run_network(net, alice, bob, questions_hz=1000.0, sim_time_s=1.0, seed=None,
 
     Returns a dict with:
 
-    * ``state``: the average state the players measured (use it with ``bg.play_chsh``).
+    * ``state``: the average state the players measured (use it with ``bg.play``).
       All NaN if no round was played: with ``no_pair="discard"``, that is when no
       question found a pair, so there is nothing to average
     * ``fidelity``: how close that is to a perfect Bell pair
@@ -437,8 +437,8 @@ def run_network(net, alice, bob, questions_hz=1000.0, sim_time_s=1.0, seed=None,
     * ``history``: one entry per question, as numpy arrays: ``t_ms`` (when it was
       asked), ``had_pair``, ``age_ms`` and ``states`` (the 4x4 state of the pair it
       used, all NaN when there was no pair; ``state`` above is the average of these).
-      ``bg.play_history`` plays these rounds one by one, and ``bg.fidelity`` takes the
-      whole stack at once.
+      ``bg.play(strategy, run, rounds="run")`` plays these rounds one by one, and
+      ``bg.fidelity`` takes the whole stack at once.
     * ``seed``: the seed this run used
 
     Example:

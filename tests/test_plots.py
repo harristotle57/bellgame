@@ -15,14 +15,14 @@ def close_figures():
 
 
 def test_every_plot_returns_its_axes():
-    exact = bg.play_chsh(bg.optimal_strategy(), bg.bell_pair(0.9))
-    sampled = bg.play_chsh(bg.optimal_strategy(), bg.bell_pair(0.9), rounds=500, seed=1)
+    exact = bg.play(bg.optimal_strategy(), bg.bell_pair(0.9))
+    sampled = bg.play(bg.optimal_strategy(), bg.bell_pair(0.9), rounds=500, seed=1)
     _, ax = plt.subplots()
     assert bg.plot_results(sampled, ax=ax) is ax
     assert bg.plot_results(exact) is not None
     assert bg.plot_correlations(exact["table"]) is not None
     assert bg.plot_angles(bg.optimal_strategy()) is not None
-    rs = [bg.play_chsh(bg.optimal_strategy(), bg.bell_pair(f)) for f in (0.7, 0.9)]
+    rs = [bg.play(bg.optimal_strategy(), bg.bell_pair(f)) for f in (0.7, 0.9)]
     ax = bg.plot_sweep([0.7, 0.9], rs, label="S")
     bg.plot_sweep([0.7, 0.9], rs, metric="S", ax=ax, label="again")
     assert len([line for line in ax.get_lines() if line.get_gid() == "sweep"]) == 2

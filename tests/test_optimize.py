@@ -9,7 +9,7 @@ import bellgame as bg
 @pytest.mark.parametrize("k", [0, 1, 2])
 def test_exact_mode_recovers_tsirelson(method, k):
     twisted = bg.misaligned_source(bg.bell_pair(), bg.random_misalignment(k))
-    assert bg.play_chsh(bg.optimal_strategy(), twisted)["S"] < 2.8
+    assert bg.play(bg.optimal_strategy(), twisted)["S"] < 2.8
     found = bg.find_alignment(twisted, method=method, seed=k)
     assert found["S"] > 2.8
 
@@ -25,7 +25,7 @@ def test_recorded_angles_are_the_simulated_angles():
     twisted = bg.misaligned_source(bg.bell_pair(0.9), bg.random_misalignment(4))
     found = bg.find_alignment(twisted, method="COBYQA", rounds=2000, seed=3, max_evaluations=60)
     assert all(-90 < a <= 90 for a in found["correction"])
-    assert found["S"] == pytest.approx(bg.play_chsh(found["strategy"], twisted)["S"])
+    assert found["S"] == pytest.approx(bg.play(found["strategy"], twisted)["S"])
 
 
 def test_wrap_angles():
@@ -50,7 +50,7 @@ def test_compare_optimizers_shape_and_quality():
 def test_link_source_alignment():
     twisted = bg.misaligned_source(bg.link(), bg.random_misalignment(2))
     found = bg.find_alignment(twisted, seed=0, max_evaluations=150)
-    best_possible = bg.play_chsh(bg.optimal_strategy(), bg.link())["S"]
+    best_possible = bg.play(bg.optimal_strategy(), bg.link())["S"]
     assert found["S"] == pytest.approx(best_possible, abs=0.01)
 
 
@@ -58,7 +58,7 @@ def test_link_source_alignment():
 def test_tiny_budget_still_evaluates_one_point(budget):
     found = bg.find_alignment(bg.bell_pair(), seed=1, **budget)
     assert found["evaluations"] == 1 and found["best_seen_S"] > -np.inf
-    assert found["S"] == pytest.approx(bg.play_chsh(found["strategy"], bg.bell_pair())["S"])
+    assert found["S"] == pytest.approx(bg.play(found["strategy"], bg.bell_pair())["S"])
 
 
 @pytest.mark.parametrize("bad", [{"max_evaluations": 0}, {"max_evaluations": 2.5}, {"time_limit_s": 0}])

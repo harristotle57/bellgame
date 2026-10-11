@@ -8,7 +8,7 @@ Example:
     >>> import bellgame as bg
     >>> import matplotlib
     >>> matplotlib.use("Agg")
-    >>> ax = bg.plot_correlations(bg.play_chsh(bg.optimal_strategy(), bg.bell_pair()))
+    >>> ax = bg.plot_correlations(bg.play(bg.optimal_strategy(), bg.bell_pair()))
 """
 
 import matplotlib.pyplot as plt
@@ -68,7 +68,7 @@ def reference_lines(ax, metric="S"):
 
 
 def plot_results(result, ax=None):
-    """Win and loss share for each question pair (x, y), from a ``play_chsh`` / ``play_classical`` result.
+    """Win and loss share for each question pair (x, y), from a ``bg.play`` result.
 
     Sampled results (``rounds=N``) are drawn from their counts; exact results from the table.
     """
@@ -137,7 +137,7 @@ def plot_sweep(xs, results, metric="S", ax=None, label=None, xlabel=None):
     Example:
         >>> import bellgame as bg
         >>> xs = [0, 10, 20]
-        >>> rs = [bg.play_chsh(bg.optimal_strategy(), bg.link(distance_km=d)) for d in xs]
+        >>> rs = [bg.play(bg.optimal_strategy(), bg.link(distance_km=d)) for d in xs]
         >>> ax = bg.plot_sweep(xs, rs, metric="S", xlabel="distance (km)")
     """
     ax = _new_ax(ax)

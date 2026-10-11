@@ -73,9 +73,9 @@ print(f"the players threw away {run['discarded_hz']:.0f} pairs/s (pick='newest' 
 # The slowest step in the chain (a link, or a node's swaps) limits pairs_hz.
 
 strategy = bg.optimal_strategy()
-print("S, exact:", round(bg.play_chsh(strategy, run)["S"], 3))
-# bg.play_history plays each recorded question on the pair it really got
-measured = bg.play_history(strategy, run, seed=1)
+print("S, exact:", round(bg.play(strategy, run)["S"], 3))
+# rounds="run" plays each recorded question on the pair it really got
+measured = bg.play(strategy, run, rounds="run", seed=1)
 print("S, as measured in those rounds:", round(measured["S"], 3))
 # With a few hundred rounds the measured S wobbles by about +/- 0.15. Try other seeds!
 # measured["history"] has every round: when it was asked, the pair's age, x, y, a, b and whether it won.
@@ -99,7 +99,7 @@ plt.show()
 for model in ["fixed", "analytic", "fock"]:
     bg.set_all_links(net, link_model=model)
     r = bg.run_network(net, "A1", "B2", sim_time_s=0.3, seed=1)
-    print(f"{model:9s} S = {bg.play_chsh(strategy, r)['S']:.3f}")
+    print(f"{model:9s} S = {bg.play(strategy, r)['S']:.3f}")
 bg.set_all_links(net, link_model="analytic")
 
 # %% [markdown]
@@ -116,7 +116,7 @@ for km in hub_kms:
     n = bg.two_star("HubA", ["A1"], "HubB", ["B2"], leaf_km=5, hub_km=km)
     r = bg.run_network(n, "A1", "B2", sim_time_s=0.3, seed=1)
     rates.append(r["rounds_hz"])
-    results.append(bg.play_chsh(strategy, r))
+    results.append(bg.play(strategy, r))
 bg.plot_sweep(hub_kms, results, metric="S", xlabel="hub-to-hub distance (km)")
 plt.show()
 print("rounds per second:", rates)
@@ -127,7 +127,7 @@ results = []
 for t in coherence_ms:
     n = bg.two_star("HubA", ["A1"], "HubB", ["B2"], leaf_km=5, hub_km=20)
     bg.set_node(n, coherence_time_ms=t)
-    results.append(bg.play_chsh(strategy, bg.run_network(n, "A1", "B2", sim_time_s=0.3, seed=1)))
+    results.append(bg.play(strategy, bg.run_network(n, "A1", "B2", sim_time_s=0.3, seed=1)))
 ax = bg.plot_sweep(coherence_ms, results, metric="S", xlabel="memory coherence time (ms)")
 ax.set_xscale("log")
 plt.show()
@@ -146,7 +146,7 @@ plt.show()
 n = bg.two_star("HubA", ["A1"], "HubB", ["B2"], leaf_km=5, hub_km=20)
 for policy in ["discard", "random"]:
     r = bg.run_network(n, "A1", "B2", sim_time_s=0.3, seed=1, no_pair=policy)
-    print(f"{policy:8s} S = {bg.play_chsh(strategy, r)['S']:.3f}")
+    print(f"{policy:8s} S = {bg.play(strategy, r)['S']:.3f}")
 
 # %% [markdown]
 # ## Under the hood: SeQUeNCe

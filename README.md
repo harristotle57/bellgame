@@ -11,7 +11,7 @@ quantum advantage, and uses the same test to build a secret key (E91).
 ```python
 import bellgame as bg
 
-result = bg.play_chsh(bg.optimal_strategy(), bg.bell_pair())
+result = bg.play(bg.optimal_strategy(), bg.bell_pair())
 print(result["win_rate"], result["S"])         # 0.854, 2.83
 ```
 
@@ -77,9 +77,28 @@ measurement setting (x picks one of two polarizer angles), measures their qubit,
 and answers with the outcome (which detector clicked). The questions are what
 make it a test: the players don't know in advance which measurement they'll make.
 
-Classical players can be any Python function from the question to an answer.
-They can flip coins, or look at their own past rounds (`player(bit, history)`).
-None of that beats 75% as long as the questions really are fair coin flips; a
+## Players
+
+Every player is a Python function `player(bit, history)` from the question to
+an answer, where `history` is the player's own past rounds as `(question,
+answer)` pairs. Players can flip coins or look at their past. On a source of
+pairs, a player also gets its half of the round's pair,
+`player(bit, history, qubit)`, and can measure it once:
+`qubit.measure(angle_deg)`. A quantum strategy dict like `bg.optimal_strategy()`
+(`{"alice": [0, 45], "bob": [22.5, -22.5]}`) is shorthand for two players that
+measure at those angles; `bg.quantum_players(strategy)` gives them as functions.
+
+```python
+def alice(x, history):                  # classical: ignore everything but the question
+    return x
+
+def bob(y, history, qubit):             # quantum: measure at 22.5 or -22.5 degrees
+    return qubit.measure(22.5 if y == 0 else -22.5)
+```
+
+`bg.play(team, source)` plays either kind of team: `(alice, bob)` or a strategy dict.
+
+No classical team beats 75% as long as the questions really are fair coin flips; a
 referee whose questions can be predicted can be beaten
 (`examples/classical_strategies.py`).
 
@@ -91,13 +110,14 @@ makes a table; the game reads the table.
 
 | Source | How to make it |
 |---|---|
-| a classical team | two functions, `bg.play_classical(alice, bob)` (add `rounds=N` for coins or memory) |
+| a classical team | no source: `bg.play((alice, bob))` (add `rounds=N` for coins or memory) |
 | an ideal or noisy qubit pair | `bg.bell_pair(fidelity)` |
 | a photonic link (Fock model) | `bg.link(distance_km=..., mean_photon_number=..., ...)` |
 | a game played across a network | `bg.run_network(net, "A1", "B2")` |
 
-`bg.play_chsh(strategy, source)` gives the exact answer; add `rounds=N, seed=...`
-to simulate a finite experiment. For a network run, `rounds=run["rounds"]` is the
+`bg.play(team, source)` gives the exact answer (for players who always do the
+same for the same question); add `rounds=N, seed=...` to play a finite
+experiment, one round at a time. For a network run, `rounds=run["rounds"]` is the
 experiment the network actually delivered.
 
 ## Build a network
@@ -165,14 +185,14 @@ print(run["path"])                                            # ['Alice', 'Repea
 print(run["questions_hz"], run["pairs_hz"], run["rounds_hz"]) # ~1000, ~3990, ~990 per second
 print(run["fidelity"], run["pair_age_ms"])                    # ~0.91, ~0.75 ms
 
-result = bg.play_chsh(bg.optimal_strategy(), run)             # exact, from the average pair
+result = bg.play(bg.optimal_strategy(), run)             # exact, from the average pair
 print(result["win_rate"], result["S"])                        # ~0.81, ~2.48
 
-finite = bg.play_chsh(bg.optimal_strategy(), run, rounds=run["rounds"], seed=1)
+finite = bg.play(bg.optimal_strategy(), run, rounds=run["rounds"], seed=1)
 ```
 
 `run["links"]` and `run["nodes"]` give each link's pair rate and each node's swap
-and memory-expiry rates; `bg.play_history(strategy, run)` replays the rounds one
+and memory-expiry rates; `bg.play(strategy, run, rounds="run")` replays the rounds one
 by one. The same `seed` gives the same run. A sweep is a loop over this: see
 `examples/distance_sweep.py` and `examples/two_star_network.py`.
 
@@ -201,7 +221,7 @@ to use it.
 |---|---|
 | `distance_sweep.py` | S and rate against distance, over a network and over a bare photonic link |
 | `two_star_network.py` | two swaps across a two-star network; sweeps of hub distance, memories and gate quality |
-| `classical_strategies.py` | coins, shared randomness and memory don't beat 75%; a predictable referee does; quantum rounds over a network, by pair age (`play_history`) |
+| `classical_strategies.py` | coins, shared randomness and memory don't beat 75%; a predictable referee does; quantum rounds over a network, by pair age (`rounds="run"`) |
 | `optimizer_comparison.py` | scipy optimizers undoing a polarization twist |
 | `e91_key.py` | key rate from a network run |
 | `eavesdropper.py` | an intercept-resend Eve against E91: which angle she should pick, why she can't learn the bases, and how much key survives |
@@ -228,7 +248,7 @@ to use it.
   measurements don't change the network, and outcome probabilities are linear
   in the state, so this gives exactly the statistics of the whole experiment.
   `run["history"]` keeps every question (time, pair age, pair state), and
-  `bg.play_history(strategy, run)` plays those rounds one by one, on the pair
+  `bg.play(strategy, run, rounds="run")` plays those rounds one by one, on the pair
   each one actually got.
 * **A link's fresh pair** comes from its `link_model`: `"fixed"` (`raw_fidelity`
   at any distance), `"analytic"` (default: dark counts fake a growing share of

@@ -141,9 +141,9 @@ fs = np.linspace(0, 0.6, 13)
 test_rounds = [1_000, 10_000, 100_000]
 fig, (ax_s, ax_key) = plt.subplots(1, 2, figsize=(12, 4))
 
-exact_s = [bg.play_chsh(STRATEGY, tapped(f, best_deg))["S"] for f in fs]
+exact_s = [bg.play(STRATEGY, tapped(f, best_deg))["S"] for f in fs]
 for i, n in enumerate(test_rounds):
-    spread = [np.std([bg.play_chsh(STRATEGY, tapped(f, best_deg), rounds=n, seed=k)["S"] for k in range(40)])
+    spread = [np.std([bg.play(STRATEGY, tapped(f, best_deg), rounds=n, seed=k)["S"] for k in range(40)])
               for f in fs]
     ax_s.fill_between(fs, np.subtract(exact_s, spread), np.add(exact_s, spread),
                       color=bg.plots.SERIES[i], alpha=0.25, linewidth=0, label=f"+-1 sd, {n:,} rounds")

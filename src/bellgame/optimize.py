@@ -25,7 +25,7 @@ import numpy as np
 from scipy.optimize import minimize
 
 from .defaults import _as_number, _in_range
-from .game import play_chsh
+from .game import play
 from .qubits import X, Y, Z, fidelity, misalign, polarization_angles
 from .strategies import optimal_strategy
 
@@ -93,7 +93,7 @@ def chsh_objective(source, strategy=None, player="alice", rounds=None, seed=None
     def objective(angles_deg):
         trial = with_correction(strategy, angles_deg, player)
         round_seed = None if rounds is None else int(rng.integers(2**32))
-        s = play_chsh(trial, source, rounds=rounds, seed=round_seed)["S"]
+        s = play(trial, source, rounds=rounds, seed=round_seed)["S"]
         if history is not None:
             history.append((time.perf_counter() - start, s))
         return -s
@@ -189,7 +189,7 @@ def find_alignment(source, strategy=None, player="alice", method="Nelder-Mead", 
     best_strategy = with_correction(strategy, best_x, player)
     return {
         "correction": [float(a) for a in wrap_angles(best_x)],
-        "S": play_chsh(best_strategy, source)["S"],
+        "S": play(best_strategy, source)["S"],
         "best_seen_S": float(-best_value),
         "strategy": best_strategy,
         "evaluations": evaluations,

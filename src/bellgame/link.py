@@ -7,10 +7,10 @@ A link is a plain dict of parameters (see ``bg.DEFAULTS``)::
     >>> my_link["distance_km"]
     20
 
-Put it into ``bg.play_chsh(strategy, my_link)`` like any other source.
+Put it into ``bg.play(strategy, my_link)`` like any other source.
 
 Example:
-    >>> r = bg.play_chsh(bg.optimal_strategy(), bg.link(distance_km=0))
+    >>> r = bg.play(bg.optimal_strategy(), bg.link(distance_km=0))
     >>> r["S"] > 2.7
     True
 """

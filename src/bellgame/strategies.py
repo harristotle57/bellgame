@@ -11,11 +11,21 @@ It may also carry correction wave plates (three angles each, see
     {"alice": [0, 45], "bob": [22.5, -22.5],
      "alice_correction": [0, 0, 0], "bob_correction": [0, 0, 0]}
 
-A **classical strategy** is just a pair of Python functions, one per player,
-that turn the referee's bit into an answer bit::
+A **player** is a Python function. It gets the referee's bit and its own past
+rounds (a list of ``(question, answer)``), and returns an answer bit::
 
-    def alice(x):
+    def alice(x, history):
         return 0
+
+On a source of pairs, it also gets its half of this round's pair, which it can
+measure once at an angle of its choice (see ``bg.Qubit``)::
+
+    def alice(x, history, qubit):
+        return qubit.measure([0, 45][x])
+
+A quantum strategy dict is shorthand for two such players (``bg.quantum_players``).
+The built-in classical players below take an optional ``qubit`` they ignore,
+so they can play on any source.
 
 Example:
     >>> import bellgame as bg
@@ -38,22 +48,22 @@ def optimal_strategy():
     return {"alice": [0, 45], "bob": [22.5, -22.5]}
 
 
-def always_zero(bit):
+def always_zero(bit, history, qubit=None):
     """Classical player who ignores the question and answers 0."""
     return 0
 
 
-def always_one(bit):
+def always_one(bit, history, qubit=None):
     """Classical player who ignores the question and answers 1."""
     return 1
 
 
-def copy_bit(bit):
+def copy_bit(bit, history, qubit=None):
     """Classical player who answers with the bit they were given."""
     return bit
 
 
-def flip_bit(bit):
+def flip_bit(bit, history, qubit=None):
     """Classical player who answers with the opposite of the bit they were given."""
     return 1 - bit
 
@@ -99,15 +109,25 @@ def measurement_unitary(strategy, player, bit):
         >>> U.shape
         (2, 2)
     """
-    angle = strategy[player][bit]
-    correction = strategy.get(player + "_correction", (0, 0, 0))
-    # ry(-2 angle) turns the polarization cos(angle) H + sin(angle) V onto H
-    return ry(-2 * angle) @ polarization_rotation(correction)
+    return _unitary(strategy[player][bit], strategy.get(player + "_correction"))
 
 
 def measurement_projectors(strategy, player, bit):
     """[P0, P1]: projectors for outcome 0 and outcome 1 on one qubit."""
-    u = measurement_unitary(strategy, player, bit)
+    return _projectors(strategy[player][bit], strategy.get(player + "_correction"))
+
+
+def _unitary(angle_deg, correction_deg=None):
+    """Correction wave plates, then turn the measurement angle onto H."""
+    if correction_deg is None:
+        correction_deg = (0, 0, 0)
+    # ry(-2 angle) turns the polarization cos(angle) H + sin(angle) V onto H
+    return ry(-2 * angle_deg) @ polarization_rotation(correction_deg)
+
+
+def _projectors(angle_deg, correction_deg=None):
+    """[P0, P1] for measuring at ``angle_deg`` after the correction wave plates."""
+    u = _unitary(angle_deg, correction_deg)
     projs = []
     for outcome in (0, 1):
         e = np.zeros(2)

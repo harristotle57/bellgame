@@ -32,7 +32,7 @@ print("SeQUeNCe star:", bg.links(one_star))
 strategy = bg.optimal_strategy()
 run = bg.run_network(net, "A1", "B2", sim_time_s=0.5, seed=1)  # A1 -> HubA -> HubB -> B2: 3 links, 2 swaps
 print("route:", run["path"], f" {run["rounds_hz"]:.0f} rounds/s,  pair fidelity {run['fidelity']:.3f}")
-print("S:", round(bg.play_chsh(strategy, run)["S"], 3))
+print("S:", round(bg.play(strategy, run)["S"], 3))
 bg.plot_network(net, highlight=run["path"])
 
 # %% [markdown]
@@ -46,7 +46,7 @@ results, rates = [], []
 for km in hub_kms:
     n = bg.two_star("HubA", ["A1", "A2", "A3"], "HubB", ["B1", "B2", "B3"], leaf_km=5, hub_km=km)
     r = bg.run_network(n, "A1", "B2", sim_time_s=0.5, seed=1)
-    results.append(bg.play_chsh(strategy, r))
+    results.append(bg.play(strategy, r))
     rates.append(r["rounds_hz"])
 
 fig, (ax_s, ax_rate) = plt.subplots(1, 2, figsize=(12, 4))
@@ -75,7 +75,7 @@ for label, gate in gate_fidelities.items():
     for t in coherence_ms:
         n = bg.two_star("HubA", ["A1"], "HubB", ["B2"], leaf_km=5, hub_km=20)
         bg.set_node(n, coherence_time_ms=t, gate_fidelity=gate)
-        results.append(bg.play_chsh(strategy, bg.run_network(n, "A1", "B2", sim_time_s=0.5, seed=1)))
+        results.append(bg.play(strategy, bg.run_network(n, "A1", "B2", sim_time_s=0.5, seed=1)))
     ax = bg.plot_sweep(coherence_ms, results, metric="S", ax=ax, label=label, xlabel="memory coherence time (ms)")
 ax.set_xscale("log")
 ax.set_title("S between A1 and B2", loc="left")

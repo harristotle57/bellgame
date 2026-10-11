@@ -53,5 +53,5 @@ plt.show()
 
 # %%
 for mu in [0.001, 0.01, 0.1, 0.3]:
-    r = bg.play_chsh(bg.optimal_strategy(), bg.link(mean_photon_number=mu))
+    r = bg.play(bg.optimal_strategy(), bg.link(mean_photon_number=mu))
     print(f"mean_photon_number {mu:<6} S = {r['S']:.3f}   coincidences per pulse = {r['coincidence_prob']:.2e}")

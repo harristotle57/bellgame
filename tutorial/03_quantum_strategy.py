@@ -27,7 +27,7 @@ plt.show()
 
 # %%
 pair = bg.bell_pair()            # a 4x4 numpy array (a density matrix)
-result = bg.play_chsh(strategy, pair)
+result = bg.play(strategy, pair)
 print("win rate:", round(result["win_rate"], 4))
 print("S:", round(result["S"], 4))
 
@@ -49,7 +49,7 @@ plt.show()
 
 # %%
 for f in [1.0, 0.95, 0.9, 0.85, 0.8, 0.75]:
-    s = bg.play_chsh(strategy, bg.bell_pair(f))["S"]
+    s = bg.play(strategy, bg.bell_pair(f))["S"]
     print(f"fidelity {f:.2f}  ->  S = {s:.3f}")
 
 # %% [markdown]
@@ -57,6 +57,6 @@ for f in [1.0, 0.95, 0.9, 0.85, 0.8, 0.75]:
 #    `bg.plot_results(result)`.
 
 # %%
-sampled = bg.play_chsh(strategy, bg.bell_pair(0.95), rounds=2000, seed=3)
+sampled = bg.play(strategy, bg.bell_pair(0.95), rounds=2000, seed=3)
 bg.plot_results(sampled)
 plt.show()
