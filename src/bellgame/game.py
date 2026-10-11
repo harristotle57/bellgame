@@ -8,6 +8,10 @@ Everything in bellgame boils down to a **probability table**
 ``table[a, b, x, y] = p(a, b | x, y)``, a numpy array of shape (2, 2, 2, 2).
 Strategies plus sources make tables; the game reads tables.
 
+A source with no data (a network run in which no round was played, whose state
+is NaN) gives NaN results and 0 rounds played. Nothing raises, so a parameter
+scan carries on past the empty points.
+
 Example:
     >>> import bellgame as bg
     >>> result = bg.play_chsh(bg.optimal_strategy(), bg.bell_pair())
@@ -19,6 +23,7 @@ import inspect
 
 import numpy as np
 
+from .defaults import _as_number
 from .strategies import check_strategy, measurement_projectors
 
 CLASSICAL_WIN_RATE = 0.75
@@ -45,6 +50,18 @@ def uses_history(player):
         return False
 
 
+def _rounds(rounds):
+    """``rounds`` as an int, or a ValueError unless it is a whole number of at least 1."""
+    n = _as_number("rounds", rounds, int)
+    if n < 1:
+        raise ValueError(f"rounds must be at least 1, got {rounds}")
+    return n
+
+
+def _no_counts():
+    return {(x, y): {"00": 0, "01": 0, "10": 0, "11": 0} for x in (0, 1) for y in (0, 1)}
+
+
 def answer(player, bit, history=()):
     """Ask a classical player for its answer bit (passing ``history`` if it wants it)."""
     a = player(bit, list(history)) if uses_history(player) else player(bit)
@@ -58,6 +75,10 @@ def table_from_classical(alice, bob):
 
     Players who flip coins, or look at past rounds, have no single table;
     play them for a number of rounds instead (``bg.play_classical(..., rounds=N)``).
+    To catch coin flippers, each player answers each question 16 times and must
+    always say the same. A player that is random only rarely (say 1% of the time)
+    usually gets through and is then given a wrong exact table, so play any
+    player that uses randomness for a number of rounds.
 
     Example:
         >>> from bellgame.strategies import always_zero
@@ -97,10 +118,9 @@ def play_rounds(alice, bob, rounds, seed=None, questions=None):
         >>> sum(sum(c.values()) for c in counts.values())
         100
     """
-    if rounds < 1:
-        raise ValueError(f"rounds must be at least 1, got {rounds}")
+    rounds = _rounds(rounds)
     rng = np.random.default_rng(seed)
-    counts = {(x, y): {"00": 0, "01": 0, "10": 0, "11": 0} for x in (0, 1) for y in (0, 1)}
+    counts = _no_counts()
     alice_past, bob_past = [], []
     for n in range(rounds):
         if questions is None:
@@ -225,10 +245,11 @@ def sample_counts(table, rounds, seed=None):
         >>> sum(sum(c.values()) for c in counts.values())
         100
     """
-    if rounds < 1:
-        raise ValueError(f"rounds must be at least 1, got {rounds}")
+    rounds = _rounds(rounds)
+    counts = _no_counts()
+    if np.isnan(table).any():  # a source with no data: there are no pairs to play
+        return counts
     rng = np.random.default_rng(seed)
-    counts = {(x, y): {"00": 0, "01": 0, "10": 0, "11": 0} for x in (0, 1) for y in (0, 1)}
     xs = rng.integers(0, 2, size=rounds)
     ys = rng.integers(0, 2, size=rounds)
     for x in (0, 1):
@@ -244,12 +265,16 @@ def sample_counts(table, rounds, seed=None):
 
 
 def table_from_counts(counts):
-    """Turn sampled counts back into an (estimated) probability table."""
+    """Turn sampled counts back into an (estimated) probability table.
+
+    A pair of questions that was never asked has no estimate: its part of the
+    table is NaN, and so is anything computed from it, like S.
+    """
     table = np.zeros((2, 2, 2, 2))
     for (x, y), c in counts.items():
         n = sum(c.values())
         if n == 0:
-            table[:, :, x, y] = 0.25
+            table[:, :, x, y] = np.nan
             continue
         for ab, k in c.items():
             table[int(ab[0]), int(ab[1]), x, y] = k / n
@@ -273,13 +298,17 @@ def summarize(table, rounds=None, seed=None):
 
 
 def summarize_counts(counts):
-    """Result dict for an experiment's counts: win rate, S and correlations as measured."""
+    """Result dict for an experiment's counts: win rate, S and correlations as measured.
+
+    S needs every pair of questions to have been asked at least once; until then it
+    is NaN. With no rounds at all, the win rate is NaN too.
+    """
     rounds = sum(sum(c.values()) for c in counts.values())
     wins = sum(k for (x, y), c in counts.items() for ab, k in c.items()
                if referee_wins(x, y, int(ab[0]), int(ab[1])))
     table = table_from_counts(counts)
-    return {"rounds": rounds, "wins": wins, "counts": counts, "win_rate": wins / rounds, "S": chsh_value(table),
-            "E": np.round(correlations(table), 6).tolist(), "table": table}
+    return {"rounds": rounds, "wins": wins, "counts": counts, "win_rate": wins / rounds if rounds else float("nan"),
+            "S": chsh_value(table), "E": np.round(correlations(table), 6).tolist(), "table": table}
 
 
 def play_classical(alice, bob, rounds=None, seed=None, questions=None):
@@ -347,7 +376,8 @@ def play_history(strategy, run, seed=None):
     like whether old pairs lose more often.
 
     Questions without a pair are skipped when the run used ``no_pair="discard"``,
-    and answered at random with ``no_pair="random"``.
+    and answered at random with ``no_pair="random"``. If no question was played,
+    the result has 0 rounds and a NaN win rate and S.
 
     Returns the same dict as ``bg.summarize_counts``, plus ``history``: the run's
     history (``t_ms``, ``had_pair``, ``age_ms``, ``states``) with, for every
@@ -362,6 +392,7 @@ def play_history(strategy, run, seed=None):
     """
     if not isinstance(run, dict) or "history" not in run:
         raise ValueError("play_history needs the dict returned by bg.run_network")
+    check_strategy(strategy)
     h = run["history"]
     n = len(h["t_ms"])
     rng = np.random.default_rng(seed)
@@ -370,9 +401,6 @@ def play_history(strategy, run, seed=None):
     states = np.where(played[:, None, None], h["states"], np.eye(4) / 4)  # no pair: random answers
     if run.get("no_pair", "discard") == "random":
         played = np.ones(n, dtype=bool)
-    if not played.any():
-        raise ValueError("no question in this run had a pair to play on")
-    check_strategy(strategy)
     # P(a, b | x, y) = Tr(rho (Pa_x (x) Pb_y)) for each round's own state and questions
     ops = np.array([[[[np.kron(pa, pb) for pb in measurement_projectors(strategy, "bob", yy)]
                       for pa in measurement_projectors(strategy, "alice", xx)]
@@ -383,7 +411,7 @@ def play_history(strategy, run, seed=None):
     outcome = np.minimum((rng.random(n)[:, None] > np.cumsum(probs, axis=1)).sum(axis=1), 3)
     a, b = np.where(played, outcome // 2, -1), np.where(played, outcome % 2, -1)
     win = played & ((a ^ b) == (x & y))
-    counts = {(i, j): {"00": 0, "01": 0, "10": 0, "11": 0} for i in (0, 1) for j in (0, 1)}
+    counts = _no_counts()
     for i, j, ai, bi in zip(x[played], y[played], a[played], b[played]):
         counts[int(i), int(j)][f"{ai}{bi}"] += 1
     result = summarize_counts(counts)

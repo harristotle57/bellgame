@@ -282,8 +282,13 @@ def test_run_with_no_rounds_has_no_state():
     assert np.all(np.isnan(run["state"])) and np.isnan(run["fidelity"])
     assert np.isnan(bg.play_chsh(bg.optimal_strategy(), run)["S"])
     assert np.isnan(bg.run_e91(run, rounds=None)["S"])
-    with pytest.raises(ValueError, match="no state"):
-        bg.run_e91(run, rounds=100, seed=1)
+    # sampled play has no pairs to play: 0 rounds and NaN results, nothing raises
+    sampled = bg.play_chsh(bg.optimal_strategy(), run, rounds=100, seed=1)
+    assert sampled["rounds"] == 0 and np.isnan(sampled["win_rate"]) and np.isnan(sampled["S"])
+    key = bg.run_e91(run, rounds=100, seed=1)
+    assert key["rounds"] == key["key_length"] == 0 and np.isnan(key["qber"]) and not key["secure"]
+    one_by_one = bg.play_history(bg.optimal_strategy(), run, seed=1)
+    assert one_by_one["rounds"] == 0 and np.isnan(one_by_one["S"])
 
 
 def test_random_answers_are_a_state_but_no_questions_are_not():
@@ -303,3 +308,10 @@ def test_twisting_a_run_twists_every_round(two_star_run):
     assert exact < bg.play_chsh(strategy, two_star_run)["win_rate"] - 0.1
     played = bg.play_history(strategy, twisted, seed=1)
     assert abs(played["win_rate"] - exact) < 4 * np.sqrt(exact * (1 - exact) / played["rounds"])
+
+
+def test_twisted_run_reports_its_own_fidelity(two_star_run):
+    twisted = bg.misaligned_source(two_star_run, {"alice": [0, 0, 0], "bob": [0, 40, 0]})
+    assert np.isclose(twisted["fidelity"], bg.fidelity(twisted["state"]))
+    assert twisted["fidelity"] < two_star_run["fidelity"] - 0.2
+    assert bg.play_chsh(bg.optimal_strategy(), twisted)["fidelity"] == twisted["fidelity"]

@@ -112,3 +112,24 @@ def test_predictable_referee_can_be_beaten():
 
     result = bg.play_classical(alice, bg.always_zero, rounds=400, questions=referee)
     assert result["win_rate"] == 1.0
+
+
+def test_s_needs_every_question_pair():
+    # 3 rounds can't ask all four question pairs; S is NaN instead of a made-up number
+    r = bg.play_chsh(bg.optimal_strategy(), bg.bell_pair(), rounds=3, seed=2)
+    assert sum(sum(c.values()) == 0 for c in r["counts"].values()) >= 1
+    assert np.isnan(r["S"]) and not np.isnan(r["win_rate"])
+
+
+@pytest.mark.parametrize("bad", [0, -3, 2.5, "ten", float("nan")])
+def test_bad_round_counts_are_refused(bad):
+    with pytest.raises(ValueError, match="rounds"):
+        bg.play_chsh(bg.optimal_strategy(), bg.bell_pair(), rounds=bad)
+    with pytest.raises(ValueError, match="rounds"):
+        bg.play_classical(bg.strategies.always_zero, bg.strategies.always_zero, rounds=bad)
+    with pytest.raises(ValueError, match="rounds"):
+        bg.run_e91(bg.bell_pair(), rounds=bad)
+
+
+def test_whole_number_floats_are_fine_as_round_counts():
+    assert bg.play_chsh(bg.optimal_strategy(), bg.bell_pair(), rounds=100.0, seed=1)["rounds"] == 100

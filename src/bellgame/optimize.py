@@ -26,7 +26,7 @@ from scipy.optimize import minimize
 
 from .defaults import _as_number, _in_range
 from .game import play_chsh
-from .qubits import X, Y, Z, misalign, polarization_angles
+from .qubits import X, Y, Z, fidelity, misalign, polarization_angles
 from .strategies import optimal_strategy
 
 ANGLE_PERIOD_DEG = 180.0  # the correction rotations repeat (up to a global phase) every 180 degrees
@@ -227,6 +227,8 @@ def misaligned_source(source, twist):
     if isinstance(source, dict) and "state" in source:
         out = dict(source)
         out["state"] = misalign(source["state"], twist["alice"], twist["bob"])
+        if "fidelity" in source:
+            out["fidelity"] = fidelity(out["state"])
         if "history" in source:  # a network run: twist every round's pair too
             history = source["history"]
             out["history"] = {**history, "states": misalign(history["states"], twist["alice"], twist["bob"])}

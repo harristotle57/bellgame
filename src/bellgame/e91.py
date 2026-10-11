@@ -19,7 +19,7 @@ Example:
 
 import numpy as np
 
-from .game import chsh_value, correlations, table_from_counts, table_from_strategy
+from .game import _no_counts, _rounds, chsh_value, correlations, table_from_counts, table_from_strategy
 
 # Polarizer angles in degrees. Index i in "alice" is Alice's basis i.
 E91_SETTINGS = {
@@ -60,6 +60,10 @@ def run_e91(source, rounds=10000, seed=None, settings=None, corrections=None):
 
     Returns a dict with ``key_alice``, ``key_bob`` (lists of bits), ``key_length``,
     ``qber`` (fraction of key bits that disagree), ``S``, ``E``, and ``secure`` (S > 2).
+
+    A source with no data (a network run in which no round was played) gives no
+    key: ``rounds`` is 0, the key is empty, ``qber`` and ``S`` are NaN, and it is
+    not secure.
     """
     if settings is None:
         settings = E91_SETTINGS
@@ -72,8 +76,9 @@ def run_e91(source, rounds=10000, seed=None, settings=None, corrections=None):
     if rounds is None:
         return _exact(probs, settings)
 
-    if any(np.isnan(p).any() for p in probs.values()):
-        raise ValueError("this source has no state to measure (a network run in which no round was played)")
+    rounds = _rounds(rounds)
+    if any(np.isnan(p).any() for p in probs.values()):  # no pairs to measure
+        rounds = 0
     rng = np.random.default_rng(seed)
     a_basis = rng.integers(0, n_a, size=rounds)
     b_basis = rng.integers(0, n_b, size=rounds)
@@ -96,7 +101,7 @@ def run_e91(source, rounds=10000, seed=None, settings=None, corrections=None):
     key_bob = b_bits[key_mask].tolist()
     errors = sum(ka != kb for ka, kb in zip(key_alice, key_bob))
 
-    counts = {(x, y): {"00": 0, "01": 0, "10": 0, "11": 0} for x in (0, 1) for y in (0, 1)}
+    counts = _no_counts()
     for (i, j), (x, y) in settings["chsh_pairs"].items():
         mask = (a_basis == i) & (b_basis == j)
         for a, b in zip(a_bits[mask], b_bits[mask]):
