@@ -12,7 +12,7 @@ to SeQUeNCe; ``bg.to_sequence`` shows you the SeQUeNCe topology it becomes.
 
 You can build the same network many ways:
 
-* ``bg.from_matrix(names, dist_km)``: a numpy distance matrix (0 = no link)
+* ``bg.from_matrix(names, dist_km)``: a numpy distance matrix (``np.inf`` = no link)
 * ``bg.from_edges([("A", "B", 10), ...])``: a list of (node, node, km)
 * ``bg.from_networkx(G)``: a networkx graph with a ``length`` (km) on each edge
 * ``bg.two_player_network``, ``bg.star``, ``bg.two_star``, ``bg.add_node``, ``bg.connect``
@@ -210,10 +210,15 @@ def from_edges(edges, names=None):
 
 
 def from_matrix(names, dist_km):
-    """Build a network from a symmetric distance matrix in km (0 or ``np.inf`` means no link).
+    """Build a network from a symmetric distance matrix in km (``np.inf`` means no link).
+
+    Every finite distance off the diagonal is a link, including 0 (a source right at
+    the detectors). The diagonal is ignored: a node has no link to itself.
 
     Example:
-        >>> links(from_matrix(["A", "B", "C"], np.array([[0, 5, 0], [5, 0, np.inf], [0, np.inf, 0]])))
+        >>> d = np.full((3, 3), np.inf)
+        >>> d[0, 1] = d[1, 0] = 5
+        >>> links(from_matrix(["A", "B", "C"], d))
         [('A', 'B')]
     """
     dist_km = np.asarray(dist_km, dtype=float)
@@ -222,18 +227,15 @@ def from_matrix(names, dist_km):
         raise ValueError(f"distance matrix must be {n} x {n} for {n} names, got {dist_km.shape}")
     if np.any(np.isnan(dist_km)):
         i, j = np.argwhere(np.isnan(dist_km))[0]
-        raise ValueError(f"dist[{i}, {j}] is NaN; use 0 or np.inf for no link")
-    dist_km = np.where(np.isinf(dist_km) & (dist_km > 0), 0.0, dist_km)
+        raise ValueError(f"dist[{i}, {j}] is NaN; use np.inf for no link")
     if not np.allclose(dist_km, dist_km.T):
         i, j = np.argwhere(~np.isclose(dist_km, dist_km.T))[0]
         raise ValueError(f"distance matrix must be symmetric: dist[{i}, {j}] = {dist_km[i, j]} "
                          f"but dist[{j}, {i}] = {dist_km[j, i]}")
-    if np.any(np.diag(dist_km) != 0):
-        raise ValueError("the diagonal of the distance matrix must be 0 (a node has no link to itself)")
     if np.any(dist_km < 0):
         raise ValueError("distances can't be negative")
     edges = [(names[i], names[j], float(dist_km[i, j]))
-             for i in range(n) for j in range(i + 1, n) if dist_km[i, j] > 0]
+             for i in range(n) for j in range(i + 1, n) if np.isfinite(dist_km[i, j])]
     return from_edges(edges, names=[str(x) for x in names])
 
 
@@ -264,13 +266,16 @@ def from_networkx(graph):
 def to_matrix(net):
     """(names, dist_km): the network as a node list and a distance matrix in km.
 
+    ``np.inf`` means no link, and the diagonal is 0.
+
     Example:
         >>> names, d = to_matrix(two_player_network(10))
         >>> d.tolist()
         [[0.0, 10.0], [10.0, 0.0]]
     """
     names = node_names(net)
-    dist = np.zeros((len(names), len(names)))
+    dist = np.full((len(names), len(names)), np.inf)
+    np.fill_diagonal(dist, 0)
     for q in net["links"]:
         i, j = (names.index(n) for n in q["nodes"])
         dist[i, j] = dist[j, i] = q["distance_km"]

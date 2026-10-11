@@ -6,8 +6,8 @@ Print it to see what you can study::
     >>> bg.DEFAULTS["loss_db_per_km"]["value"]
     0.2
 
-Each entry is ``{"value": ..., "unit": ..., "meaning": ..., "group": ...}``. Network
-parameters also say which values are allowed: a ``range`` such as ``"(0, 1]"``, a tuple
+Each entry is ``{"value": ..., "unit": ..., "meaning": ..., "group": ...}``. Most entries
+also say which values are allowed: a ``range`` such as ``"(0, 1]"``, a tuple
 of ``choices``, or a ``total`` that a list of shares must add up to. The groups:
 
 * ``fiber`` and ``detector``: on every link, in a network or on its own
@@ -22,7 +22,7 @@ import numpy as np
 DEFAULTS = {
     # --- fiber ---
     "distance_km": {
-        "value": 10.0, "unit": "km", "group": "fiber", "range": "(0, inf)",
+        "value": 10.0, "unit": "km", "group": "fiber", "range": "[0, inf)",
         "meaning": "fiber length between the two ends of the link (the pair is made in the middle)",
     },
     "loss_db_per_km": {
@@ -83,12 +83,12 @@ DEFAULTS = {
         "meaning": "polarization twist the fiber applies on Bob's side (3 angles)",
     },
     "no_click": {
-        "value": "discard", "unit": "", "group": "photonic",
+        "value": "discard", "unit": "", "group": "photonic", "choices": ("discard", "random", "zero"),
         "meaning": "what a player answers when neither detector clicks: 'discard' (throw the "
                    "round away = fair-sampling assumption), 'random', or 'zero'",
     },
     "double_click": {
-        "value": "random", "unit": "", "group": "photonic",
+        "value": "random", "unit": "", "group": "photonic", "choices": ("random", "zero"),
         "meaning": "what a player answers when both detectors click: 'random' or 'zero'",
     },
     # --- network node ---

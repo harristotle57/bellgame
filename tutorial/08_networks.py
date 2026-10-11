@@ -15,13 +15,13 @@ import numpy as np
 
 import bellgame as bg
 
-# Way 1: a distance matrix (km). 0 means "no fiber".
+# Way 1: a distance matrix (km). np.inf means "no fiber"; 0 is a fiber of length 0.
 names = ["HubA", "A1", "A2", "A3", "HubB", "B1", "B2", "B3"]
-dist = np.zeros((8, 8))
-dist[0, 1:4] = 5          # HubA to its leaves
-dist[4, 5:8] = 5          # HubB to its leaves
-dist[0, 4] = 20           # hub to hub
-dist = dist + dist.T      # fibers go both ways: make it symmetric
+dist = np.full((8, 8), np.inf)
+np.fill_diagonal(dist, 0)                # a node is 0 km from itself
+dist[0, 1:4] = dist[1:4, 0] = 5          # HubA to its leaves (fibers go both ways)
+dist[4, 5:8] = dist[5:8, 4] = 5          # HubB to its leaves
+dist[0, 4] = dist[4, 0] = 20             # hub to hub
 net = bg.from_matrix(names, dist)
 
 # Way 2: the builder

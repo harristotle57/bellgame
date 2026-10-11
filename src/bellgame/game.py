@@ -40,6 +40,8 @@ Example:
 # Players always take their history: def alice(bit, history), and on a source of pairs
 # def alice(bit, history, qubit). The built-in players (always_zero, ...) take (bit, history, qubit=None).
 # A sampled result's "table" is now the measured table (the one its S comes from), not the exact one.
+# bg.from_matrix: np.inf is now "no link" and 0 is a 0 km link; bg.to_matrix writes np.inf for no link.
+# A matrix that uses 0 for "no link" must change to np.inf (np.full((n, n), np.inf), diagonal 0).
 
 import inspect
 

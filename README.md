@@ -146,10 +146,10 @@ bg.connect(net, "Repeater", "Bob", 15)
 # A list of (node, node, km)
 net = bg.from_edges([("Alice", "Repeater", 10), ("Repeater", "Bob", 15)])
 
-# A symmetric distance matrix in km (0 or np.inf = no link)
-dist_km = np.array([[0, 10, 0],
+# A symmetric distance matrix in km (np.inf = no link; 0 is a 0 km link)
+dist_km = np.array([[0, 10, np.inf],
                     [10, 0, 15],
-                    [0, 15, 0]])
+                    [np.inf, 15, 0]])
 net = bg.from_matrix(["Alice", "Repeater", "Bob"], dist_km)
 
 # A networkx graph with a `length` (km) on each edge

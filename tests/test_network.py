@@ -10,7 +10,8 @@ NAMES = ["HubA", "A1", "A2", "A3", "HubB", "B1", "B2", "B3"]
 
 
 def two_star_matrix(leaf_km=5, hub_km=20):
-    d = np.zeros((8, 8))
+    d = np.full((8, 8), np.inf)
+    np.fill_diagonal(d, 0)
     d[0, 1:4] = d[1:4, 0] = leaf_km
     d[4, 5:8] = d[5:8, 4] = leaf_km
     d[0, 4] = d[4, 0] = hub_km
@@ -51,14 +52,23 @@ def test_matrix_must_be_symmetric():
         bg.from_matrix(NAMES, d)
 
 
-def test_matrix_inf_means_no_link():
+def test_matrix_inf_means_no_link_and_zero_is_a_link():
     d = two_star_matrix()
-    d[d == 0] = np.inf
-    np.fill_diagonal(d, 0)
-    assert bg.from_matrix(NAMES, d) == builder_net()
+    d[0, 1] = d[1, 0] = 0
+    net = bg.from_matrix(NAMES, d)
+    assert bg.link_params(net, "HubA", "A1")["distance_km"] == 0
+    assert len(bg.links(net)) == len(bg.links(builder_net()))
+    names, back = bg.to_matrix(net)
+    assert bg.from_matrix(names, back) == net
     d[0, 1] = d[1, 0] = np.nan
     with pytest.raises(ValueError, match="NaN"):
         bg.from_matrix(NAMES, d)
+
+
+def test_a_zero_km_link_runs():
+    net = bg.two_player_network(0)
+    run = bg.run_network(net, "Alice", "Bob", sim_time_s=0.02, seed=1)
+    assert run["rounds"] > 0
 
 
 def test_from_networkx_keeps_sequence_attenuation():

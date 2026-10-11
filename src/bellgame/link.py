@@ -5,7 +5,7 @@ A link is a plain dict of parameters (see ``bg.DEFAULTS``)::
     >>> import bellgame as bg
     >>> my_link = bg.link(distance_km=20, mean_photon_number=0.05)
     >>> my_link["distance_km"]
-    20
+    20.0
 
 Put it into ``bg.play(strategy, my_link)`` like any other source.
 
@@ -15,14 +15,13 @@ Example:
     True
 """
 
+import itertools
+
 import numpy as np
 
 from . import fock
-from .defaults import DEFAULTS, PHOTONIC_GROUPS, default_values
+from .defaults import DEFAULTS, PHOTONIC_GROUPS, clean_value, default_values
 from .strategies import check_strategy
-
-NO_CLICK_POLICIES = ("discard", "random", "zero")
-DOUBLE_CLICK_POLICIES = ("random", "zero")
 
 _STATE_CACHE = {}
 
@@ -39,8 +38,7 @@ def link(**changes):
         if name not in params:
             raise ValueError(f"'{name}' is not a link parameter. Link parameters are: "
                              f"{', '.join(sorted(params))}")
-        params[name] = value
-    check_link(params)
+        params[name] = clean_value(name, value, where="link")
     return params
 
 
@@ -57,20 +55,14 @@ def photonic(params):
 
 
 def check_link(params):
-    """Raise a friendly error if a link dict has a bad value."""
+    """Raise a friendly error if a link dict is missing a parameter or has a bad value.
+
+    Each value is checked against its entry in ``bg.DEFAULTS`` (type, range, choices).
+    """
     for name in default_values(*PHOTONIC_GROUPS):
         if name not in params:
             raise ValueError(f"link is missing '{name}' (make links with bg.link(...))")
-    if params["no_click"] not in NO_CLICK_POLICIES:
-        raise ValueError(f"no_click must be one of {NO_CLICK_POLICIES}, got {params['no_click']!r}")
-    if params["double_click"] not in DOUBLE_CLICK_POLICIES:
-        raise ValueError(f"double_click must be one of {DOUBLE_CLICK_POLICIES}, "
-                         f"got {params['double_click']!r}")
-    if int(params["truncation"]) < 1:
-        raise ValueError("truncation must be at least 1")
-    for key in ("alice_misalignment_deg", "bob_misalignment_deg"):
-        if len(params[key]) != 3:
-            raise ValueError(f"{key} needs three angles in degrees")
+        clean_value(name, params[name], where="link")
 
 
 def dark_count_prob(params):
@@ -119,6 +111,7 @@ def arriving_state(params):
     ub = fock.polarization_unitary(params["bob_misalignment_deg"], t)
     u = np.kron(ua, ub)
     rho = u @ rho @ u.conj().T
+    rho.flags.writeable = False  # shared by every caller with the same link: nobody may change it
     if len(_STATE_CACHE) > 256:
         _STATE_CACHE.clear()
     _STATE_CACHE[key] = rho
@@ -158,32 +151,34 @@ def _bit_probabilities(c0, c1, params):
 def link_outcomes(params, strategy):
     """(table, coincidence_prob): the CHSH table for this link, and how often both sides click.
 
-    ``coincidence_prob`` is per pulse, averaged over the four question pairs.
+    ``coincidence_prob`` is the chance, per pulse of the source, that both players see a
+    click (from either of their two detectors), dark counts and double pairs included.
+    It is exact, not sampled, and it doesn't depend on the measurement angles. Multiply
+    by the source's pulse rate for coincidences per second. With ``no_click="discard"``
+    it is also the fraction of pulses that become rounds: ``N`` rounds take about
+    ``N / coincidence_prob`` pulses.
+
+    A question pair whose rounds are all discarded has NaN in the table: there is no
+    data for it.
     """
     check_strategy(strategy)
+    # one player's click pattern: (outcome-0 detector clicked, outcome-1 detector clicked)
+    patterns = list(itertools.product((0, 1), repeat=2))
+    bits = {c: _bit_probabilities(*c, params) for c in patterns}  # None: the round is discarded
     table = np.zeros((2, 2, 2, 2))
-    coincidence = 0.0
-    for x in (0, 1):
-        for y in (0, 1):
-            clicks = click_probabilities(params, strategy, x, y)
-            kept = 0.0
-            for ca0 in (0, 1):
-                for ca1 in (0, 1):
-                    bits_a = _bit_probabilities(ca0, ca1, params)
-                    for cb0 in (0, 1):
-                        for cb1 in (0, 1):
-                            p = clicks[ca0, ca1, cb0, cb1]
-                            if (ca0 or ca1) and (cb0 or cb1):
-                                coincidence += p / 4
-                            bits_b = _bit_probabilities(cb0, cb1, params)
-                            if bits_a is None or bits_b is None:
-                                continue
-                            kept += p
-                            table[:, :, x, y] += p * np.outer(bits_a, bits_b)
-            if kept > 0:
-                table[:, :, x, y] /= kept
-            else:
-                table[:, :, x, y] = 0.25
+    for x, y in itertools.product((0, 1), repeat=2):
+        clicks = click_probabilities(params, strategy, x, y)
+        kept = 0.0
+        for ca, cb in itertools.product(patterns, repeat=2):
+            if bits[ca] is None or bits[cb] is None:
+                continue
+            kept += clicks[ca + cb]
+            table[:, :, x, y] += clicks[ca + cb] * np.outer(bits[ca], bits[cb])
+        table[:, :, x, y] = table[:, :, x, y] / kept if kept > 0 else np.nan
+    # Whether a side clicks at all depends only on how many photons reach it; the angle
+    # only picks which of its two detectors fires. So any question pair gives the same
+    # coincidence probability, and the last one's clicks will do.
+    coincidence = sum(clicks[ca + cb] for ca, cb in itertools.product(patterns, repeat=2) if any(ca) and any(cb))
     return table, float(coincidence)
 
 
@@ -230,17 +225,23 @@ def fock_pair_weights(params):
     first one is the fidelity). ``params`` can be a network link (the photonic
     extras are filled in with no misalignment).
 
+    A link with a polarization twist is refused: four Bell-state weights (how SeQUeNCe
+    stores a pair) can't describe a twisted pair. Twist the delivered pairs afterwards
+    instead, with ``bg.misalign`` or ``bg.misaligned_source``.
+
     Example:
         >>> w, p = fock_pair_weights(link(distance_km=0))
         >>> round(w[0], 3)  # not 1: sometimes the source makes two pairs at once
         0.995
     """
     full = photonic(params)
-    full["alice_misalignment_deg"] = [0.0, 0.0, 0.0]
-    full["bob_misalignment_deg"] = [0.0, 0.0, 0.0]
+    for key in ("alice_misalignment_deg", "bob_misalignment_deg"):
+        if np.any(np.asarray(full[key]) != 0):
+            raise ValueError(f"fock_pair_weights needs an untwisted link, got {key}={full[key]}: four Bell-state "
+                             "weights can't describe a twisted pair. Leave the twist out here and add it to the "
+                             "delivered pairs with bg.misalign or bg.misaligned_source.")
     full["no_click"] = "discard"
     t = {}
-    coincidence = 0.0
     for name, strategy in _PAULI_SETTINGS.items():
         table, coincidence = link_outcomes(full, strategy)
         signs = np.array([[1, -1], [-1, 1]])

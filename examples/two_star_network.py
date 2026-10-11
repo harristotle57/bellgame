@@ -16,7 +16,8 @@ net = bg.two_star(hub_a="HubA", leaves_a=["A1", "A2", "A3"],
 
 # The same network from a distance matrix:
 names = ["HubA", "A1", "A2", "A3", "HubB", "B1", "B2", "B3"]
-dist = np.zeros((8, 8))
+dist = np.full((8, 8), np.inf)                     # inf: no fiber
+np.fill_diagonal(dist, 0)
 dist[0, 1:4] = dist[1:4, 0] = 5                    # star A
 dist[4, 5:8] = dist[5:8, 4] = 5                    # star B
 dist[0, 4] = dist[4, 0] = 20                       # hub to hub
