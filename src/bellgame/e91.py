@@ -72,6 +72,8 @@ def run_e91(source, rounds=10000, seed=None, settings=None, corrections=None):
     if rounds is None:
         return _exact(probs, settings)
 
+    if any(np.isnan(p).any() for p in probs.values()):
+        raise ValueError("this source has no state to measure (a network run in which no round was played)")
     rng = np.random.default_rng(seed)
     a_basis = rng.integers(0, n_a, size=rounds)
     b_basis = rng.integers(0, n_b, size=rounds)
