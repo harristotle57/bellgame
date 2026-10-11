@@ -49,7 +49,7 @@ from sequence.topology.router_net_topo import RouterNetTopo
 from sequence.utils import metrics
 from sequence.utils.metrics import EventTypes
 
-from .defaults import _as_number, _in_range
+from .defaults import check
 from .link import fock_pair_weights
 from .network import link_params, links, node_names, node_params, to_networkx
 from .qubits import bell_diagonal, fidelity
@@ -449,8 +449,8 @@ def run_network(net, alice, bob, questions_hz=1000.0, sim_time_s=1.0, seed=None,
         >>> len(run["history"]["t_ms"]) == run["questions"]
         True
     """
-    questions_hz = _run_number("questions_hz", questions_hz, f"(0, {PS_PER_S:g}]")  # at most one question per ps
-    sim_time_s = _run_number("sim_time_s", sim_time_s, "(0, inf)")
+    questions_hz = check("questions_hz", questions_hz)
+    sim_time_s = check("sim_time_s", sim_time_s)
     if no_pair not in NO_PAIR_POLICIES:
         raise ValueError(f"no_pair must be one of {NO_PAIR_POLICIES}, got {no_pair!r}")
     if pick not in PICK_POLICIES:
@@ -528,14 +528,6 @@ def run_network(net, alice, bob, questions_hz=1000.0, sim_time_s=1.0, seed=None,
         "sim_time_s": sim_time_s,
         "seed": seed,
     }
-
-
-def _run_number(name, value, interval):
-    """``value`` as a float, or a ValueError if it is not a number inside ``interval``."""
-    x = _as_number(name, value, float)
-    if not _in_range(x, interval):
-        raise ValueError(f"{name} must be in {interval}, got {value}")
-    return x
 
 
 def _event_counts(records):

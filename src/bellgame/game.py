@@ -47,7 +47,7 @@ import inspect
 
 import numpy as np
 
-from .defaults import _as_number
+from .defaults import check
 from .strategies import check_strategy, measurement_projectors, measurement_setting, projectors
 
 CLASSICAL_WIN_RATE = 0.75
@@ -65,14 +65,6 @@ def referee_wins(x, y, a, b):
         True
     """
     return (a ^ b) == (x & y)
-
-
-def _rounds(rounds):
-    """``rounds`` as an int, or a ValueError unless it is a whole number of at least 1."""
-    n = _as_number("rounds", rounds, int)
-    if n < 1:
-        raise ValueError(f"rounds must be at least 1, got {rounds}")
-    return n
 
 
 def _no_counts():
@@ -192,7 +184,7 @@ def sample_counts(table, rounds, seed=None):
         >>> sum(sum(c.values()) for c in counts.values())
         100
     """
-    rounds = _rounds(rounds)
+    rounds = check("rounds", rounds)
     rng = np.random.default_rng(seed)
     xs, ys = _questions(rounds, rng, None)
     return _counts_from_table(table, xs, ys, rng)
@@ -555,7 +547,7 @@ def play(team, source=None, rounds=None, seed=None, questions=None):
                              "returned by bg.run_network")
         result, extras = _replay(strategy, alice, bob, source, np.random.default_rng(seed), questions), {}
     else:
-        rounds = _rounds(rounds)
+        rounds = check("rounds", rounds)
         rng = np.random.default_rng(seed)
         if strategy is not None or kind == "link":  # fixed settings: draw from the table
             table, extras = (_strategy_table(strategy, source, kind) if strategy is not None

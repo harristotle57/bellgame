@@ -20,7 +20,7 @@ import itertools
 import numpy as np
 
 from . import fock
-from .defaults import DEFAULTS, PHOTONIC_GROUPS, clean_value, default_values
+from .defaults import PHOTONIC_GROUPS, check, default_values, describe
 from .strategies import check_strategy
 
 _STATE_CACHE = {}
@@ -38,7 +38,7 @@ def link(**changes):
         if name not in params:
             raise ValueError(f"'{name}' is not a link parameter. Link parameters are: "
                              f"{', '.join(sorted(params))}")
-        params[name] = clean_value(name, value, where="link")
+        params[name] = check(name, value, where="link")
     return params
 
 
@@ -62,7 +62,7 @@ def check_link(params):
     for name in default_values(*PHOTONIC_GROUPS):
         if name not in params:
             raise ValueError(f"link is missing '{name}' (make links with bg.link(...))")
-        clean_value(name, params[name], where="link")
+        check(name, params[name], where="link")
 
 
 def dark_count_prob(params):
@@ -203,8 +203,7 @@ def photon_numbers(params):
 def describe_link(params):
     """Print every link parameter with its unit and meaning."""
     for name, value in params.items():
-        entry = DEFAULTS.get(name, {"unit": "", "meaning": ""})
-        print(f"  {name:24s} = {value!s:18s} {entry['unit']:8s} {entry['meaning']}")
+        print("  " + describe(name, value))
 
 
 # Measuring ZZ, XX and YY on the pair. YY uses a correction wave plate that turns

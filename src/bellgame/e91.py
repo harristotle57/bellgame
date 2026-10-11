@@ -19,7 +19,8 @@ Example:
 
 import numpy as np
 
-from .game import _no_counts, _rounds, chsh_value, correlations, table_from_counts, table_from_strategy
+from .defaults import check
+from .game import _no_counts, chsh_value, correlations, table_from_counts, table_from_strategy
 
 # Polarizer angles in degrees. Index i in "alice" is Alice's basis i.
 E91_SETTINGS = {
@@ -76,7 +77,7 @@ def run_e91(source, rounds=10000, seed=None, settings=None, corrections=None):
     if rounds is None:
         return _exact(probs, settings)
 
-    rounds = _rounds(rounds)
+    rounds = check("rounds", rounds)
     if any(np.isnan(p).any() for p in probs.values()):  # no pairs to measure
         rounds = 0
     rng = np.random.default_rng(seed)

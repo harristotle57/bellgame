@@ -2,7 +2,6 @@ import numpy as np
 import pytest
 
 import bellgame as bg
-from bellgame.qubits import check_angles
 
 
 def same_rotation(u, v):
@@ -30,19 +29,14 @@ def test_misalign_with_no_twist_changes_nothing():
     assert np.allclose(bg.misalign(rho, bob_deg=[5, 0, 0]), bg.misalign(rho, [0, 0, 0], [5, 0, 0]))
 
 
-@pytest.mark.parametrize("bad", [5, "abc", [0, "x", 0]])
-def test_angle_checks_reject_non_numbers(bad):
-    with pytest.raises(TypeError, match="angles in degrees"):
+@pytest.mark.parametrize("bad", [5, "abc", [0, "x", 0], [0, 45], [0, np.nan, 0]])
+def test_polarization_rotation_needs_three_angles(bad):
+    with pytest.raises(ValueError, match="rotation_deg"):
         bg.polarization_rotation(bad)
 
 
-def test_angle_checks_reject_wrong_counts():
-    with pytest.raises(ValueError, match="exactly 3 angles"):
-        bg.polarization_rotation([0, 45])
-    assert check_angles(np.array([1, 2]), 2, "x") == (1.0, 2.0)
-
-
 @pytest.mark.parametrize("make", [bg.bell_pair, bg.werner])
-def test_state_makers_reject_non_numbers(make):
-    with pytest.raises(TypeError, match="must be a number"):
-        make("0.9x")
+def test_state_makers_reject_bad_values(make):
+    for bad in ("0.9x", np.nan, 2):
+        with pytest.raises(ValueError):
+            make(bad)

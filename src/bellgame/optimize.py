@@ -24,7 +24,7 @@ import time
 import numpy as np
 from scipy.optimize import minimize
 
-from .defaults import _as_number, _in_range
+from .defaults import check
 from .game import play
 from .qubits import X, Y, Z, fidelity, misalign, polarization_angles
 from .strategies import optimal_strategy
@@ -160,11 +160,9 @@ def find_alignment(source, strategy=None, player="alice", method="Nelder-Mead", 
     Returns a dict with ``correction`` (3 angles in degrees), ``S`` (checked
     exactly at the end), ``strategy`` (ready to use), ``evaluations`` and ``history``.
     """
-    max_evaluations = _as_number("max_evaluations", max_evaluations, int)
-    if max_evaluations < 1:
-        raise ValueError(f"max_evaluations must be at least 1, got {max_evaluations}")
-    if time_limit_s is not None and not _in_range(_as_number("time_limit_s", time_limit_s, float), "(0, inf]"):
-        raise ValueError(f"time_limit_s must be more than 0 (or None), got {time_limit_s}")
+    max_evaluations = check("max_evaluations", max_evaluations)
+    if time_limit_s is not None:
+        time_limit_s = check("time_limit_s", time_limit_s)
     if strategy is None:
         strategy = optimal_strategy()
     rng = np.random.default_rng(seed)

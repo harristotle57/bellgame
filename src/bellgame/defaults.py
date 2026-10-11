@@ -1,4 +1,5 @@
-"""Every knob you can turn, with a realistic default, its unit, and what it means.
+"""Every knob you can turn, with a realistic default, its unit, and what it means,
+and the rule for every number you pass in.
 
 Print it to see what you can study::
 
@@ -7,14 +8,27 @@ Print it to see what you can study::
     0.2
 
 Each entry is ``{"value": ..., "unit": ..., "meaning": ..., "group": ...}``. Most entries
-also say which values are allowed: a ``range`` such as ``"(0, 1]"``, a tuple
-of ``choices``, or a ``total`` that a list of shares must add up to. The groups:
+also say which values are allowed: a ``range`` such as ``"(0, 1]"`` (a bracket includes
+that end, a parenthesis leaves it out), a tuple of ``choices``, or a ``total`` that a list
+of shares must add up to. The groups:
 
 * ``fiber`` and ``detector``: on every link, in a network or on its own
 * ``pair``: how good a network link's freshly made pair is (``link_model`` picks the physics)
 * ``source``: the SPDC photon source, used by ``link_model="fock"`` and by ``bg.link``
 * ``photonic``: extras that only a stand-alone photonic link (``bg.link``) has
 * ``node``: a network node's quantum memories and swapping hardware
+
+``ARGUMENTS`` has the same kind of entries, without a value, for numbers you pass to
+functions (``rounds``, ``sim_time_s``, angles, ...): their defaults are each function's own.
+
+``check(name, value)`` checks a value against its entry, in either table. Everything in
+bellgame that takes a quantity checks it this way, so each quantity has one rule. NaN is
+never accepted: bellgame uses NaN only in results, to mean "no data".
+
+To change a default for the rest of your session (every later ``bg.link()`` and new
+network starts from it), set its value, like matplotlib's ``rcParams``::
+
+    bg.DEFAULTS["loss_db_per_km"]["value"] = 0.16
 """
 
 import numpy as np
@@ -127,6 +141,54 @@ DEFAULTS = {
 LINK_GROUPS = ("fiber", "detector", "pair", "source")       # a link inside a network
 PHOTONIC_GROUPS = ("fiber", "detector", "source", "photonic")  # bg.link, a link on its own
 
+# Numbers passed to functions rather than set on a link or node. Same rules as DEFAULTS
+# (``range``, ``whole``, ``count`` for a list), but no value: each function has its own default.
+ARGUMENTS = {
+    # --- playing and simulating ---
+    "rounds": {
+        "unit": "rounds", "range": "[1, inf)", "whole": True,
+        "meaning": "how many rounds to play",
+    },
+    "sim_time_s": {
+        "unit": "s", "range": "(0, inf)",
+        "meaning": "how long SeQUeNCe simulates the network",
+    },
+    "questions_hz": {
+        "unit": "Hz", "range": "(0, 1e12]",
+        "meaning": "how often the referee asks a question (at most once per picosecond, SeQUeNCe's time step)",
+    },
+    # --- searching for corrections ---
+    "max_evaluations": {
+        "unit": "", "range": "[1, inf)", "whole": True,
+        "meaning": "most times a search may play the game",
+    },
+    "time_limit_s": {
+        "unit": "s", "range": "(0, inf]",
+        "meaning": "longest a search may run",
+    },
+    # --- two-qubit states ---
+    "fidelity": {
+        "unit": "", "range": "[0, 1]",
+        "meaning": "overlap of a pair with the perfect Bell pair Phi+",
+    },
+    "visibility": {
+        "unit": "", "range": "[-1/3, 1]",
+        "meaning": "weight of Phi+ in a Werner state; the rest is white noise",
+    },
+    # --- angles ---
+    "angle_deg": {
+        "unit": "deg", "meaning": "one polarizer angle",
+    },
+    "angles_deg": {
+        "unit": "deg", "count": 2,
+        "meaning": "a player's polarizer angles in a strategy, one per question",
+    },
+    "rotation_deg": {
+        "unit": "deg", "count": 3,
+        "meaning": "a polarization rotation: a twist or a correction (see bg.polarization_rotation)",
+    },
+}
+
 
 def default_values(*groups):
     """Plain {name: value} dict of the defaults in the given groups.
@@ -143,37 +205,41 @@ def default_values(*groups):
     return out
 
 
-def clean_value(name, value, where=None):
-    """``value`` as bellgame stores parameter ``name``, or a ValueError saying what is wrong.
+def check(name, value, where=None):
+    """``value`` as bellgame stores quantity ``name``, or a ValueError saying what is wrong.
 
-    Numbers become floats (ints where the default is an int) and lists become new lists
-    of floats. NaN is never allowed; ``range``, ``choices`` and ``total`` are checked when
-    the entry has them. ``where`` (e.g. ``"node Alice"``) starts the error message.
+    ``name`` is an entry in ``DEFAULTS`` or ``ARGUMENTS``. Numbers become floats (ints for
+    whole-number quantities) and lists become new lists of floats. NaN is never allowed;
+    ``range``, ``choices`` and ``total`` are checked when the entry has them. ``where``
+    (e.g. ``"node Alice"``) starts the error message.
 
     Example:
-        >>> clean_value("memory_size", 6.0)
+        >>> check("memory_size", 6.0)
         6
-        >>> clean_value("detector_efficiency", float("nan"), where="link A -- B")
+        >>> check("detector_efficiency", float("nan"), where="link A -- B")
         Traceback (most recent call last):
         ...
         ValueError: link A -- B: detector_efficiency is NaN
     """
-    entry, default = DEFAULTS[name], DEFAULTS[name]["value"]
+    entry = _entry(name)
+    default = entry.get("value")
+    interval = entry.get("range", "(-inf, inf)")
     try:
-        if isinstance(default, list):
-            value = _as_list(name, value, len(default))
+        if "choices" in entry:
+            if value not in entry["choices"]:
+                raise ValueError(f"{name} must be one of {entry['choices']}, got {value!r}")
         elif isinstance(default, bool):
             if not isinstance(value, (bool, np.bool_)):
                 raise ValueError(f"{name} must be True or False, got {value!r}")
             value = bool(value)
-        elif isinstance(default, str):
-            if "choices" in entry and value not in entry["choices"]:
-                raise ValueError(f"{name} must be one of {entry['choices']}, got {value!r}")
+        elif "count" in entry or isinstance(default, list):
+            count = entry.get("count", len(default or []))
+            if isinstance(value, (str, dict)) or not hasattr(value, "__len__") or len(value) != count:
+                raise ValueError(f"{name} must be a list of {count} numbers, got {value!r}")
+            value = [_number(name, x, interval, whole=False) for x in value]
         else:
-            value = _as_number(name, value, type(default))
-        for x in value if isinstance(value, list) else [value]:
-            if "range" in entry and not _in_range(x, entry["range"]):
-                raise ValueError(f"{name} must be in {entry['range']}, got {value}")
+            whole = entry.get("whole", type(default) is int)
+            value = _number(name, value, interval, whole)
         if "total" in entry and not np.isclose(sum(value), entry["total"]):
             raise ValueError(f"{name} must add up to {entry['total']}, got {value}")
     except ValueError as err:
@@ -181,8 +247,27 @@ def clean_value(name, value, where=None):
     return value
 
 
-def _as_number(name, value, kind):
-    if isinstance(value, (bool, np.bool_)):
+def describe(name, value=None):
+    """One line: quantity ``name``, its value (the default unless you give one), unit and meaning.
+
+    Example:
+        >>> describe("memory_size", 4)
+        'memory_size              = 4                  memories number of quantum memories in the node'
+    """
+    entry = _entry(name)
+    value = entry.get("value") if value is None else value
+    return f"{name:24s} = {value!s:18s} {entry['unit']:8s} {entry['meaning']}"
+
+
+def _entry(name):
+    if name in DEFAULTS:
+        return DEFAULTS[name]
+    return ARGUMENTS[name]
+
+
+def _number(name, value, interval, whole):
+    """One number checked against ``interval``: a float, or an int if ``whole``."""
+    if isinstance(value, (bool, np.bool_)):  # True would quietly count as 1
         raise ValueError(f"{name} must be a number, got {value!r}")
     try:
         x = float(value)
@@ -190,28 +275,26 @@ def _as_number(name, value, kind):
         raise ValueError(f"{name} must be a number, got {value!r}") from None
     if np.isnan(x):
         raise ValueError(f"{name} is NaN")
-    if kind is int:
+    if whole:
         if not x.is_integer():
             raise ValueError(f"{name} must be a whole number, got {value}")
-        return int(x)
+        x = int(x)
+    if not _in_interval(x, interval):
+        raise ValueError(f"{name} must be in {interval}, got {value}")
     return x
 
 
-def _as_list(name, value, length):
-    if isinstance(value, (str, dict)) or not hasattr(value, "__len__") or len(value) != length:
-        raise ValueError(f"{name} must be a list of {length} numbers, got {value!r}")
-    return [_as_number(name, x, float) for x in value]
-
-
-def _in_range(x, interval):
-    """Is ``x`` inside ``interval``, written like ``"(0, inf]"``?"""
-    low, high = (float(end) for end in interval[1:-1].split(","))
+def _in_interval(x, interval):
+    """Is ``x`` inside ``interval``, written like ``"(0, inf]"`` or ``"[-1/3, 1]"``?"""
+    low, high = (_end(end) for end in interval[1:-1].split(","))
     above = low <= x if interval[0] == "[" else low < x
     below = x <= high if interval[-1] == "]" else x < high
     return above and below
 
 
-def describe(name):
-    """One line: name = value unit  -- meaning."""
-    entry = DEFAULTS[name]
-    return f"{name} = {entry['value']} {entry['unit']}  -- {entry['meaning']}"
+def _end(text):
+    """One end of an interval: a number, ``inf``, or a fraction like ``-1/3``."""
+    if "/" in text:
+        top, bottom = text.split("/")
+        return float(top) / float(bottom)
+    return float(text)

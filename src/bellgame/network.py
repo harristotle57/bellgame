@@ -39,7 +39,7 @@ from copy import deepcopy
 import networkx as nx
 import numpy as np
 
-from .defaults import DEFAULTS, LINK_GROUPS, clean_value, default_values
+from .defaults import LINK_GROUPS, check, default_values, describe
 
 
 def _edits(change):
@@ -232,8 +232,6 @@ def from_matrix(names, dist_km):
         i, j = np.argwhere(~np.isclose(dist_km, dist_km.T))[0]
         raise ValueError(f"distance matrix must be symmetric: dist[{i}, {j}] = {dist_km[i, j]} "
                          f"but dist[{j}, {i}] = {dist_km[j, i]}")
-    if np.any(dist_km < 0):
-        raise ValueError("distances can't be negative")
     edges = [(names[i], names[j], float(dist_km[i, j]))
              for i in range(n) for j in range(i + 1, n) if np.isfinite(dist_km[i, j])]
     return from_edges(edges, names=[str(x) for x in names])
@@ -309,7 +307,7 @@ def set_link(net, a, b, **changes):
         if name not in allowed:
             raise ValueError(f"'{name}' is not a link parameter. Link parameters are: "
                              f"{', '.join(sorted(allowed))}")
-        q[name] = clean_value(name, value, where=f"link {q['nodes'][0]} -- {q['nodes'][1]}")
+        q[name] = check(name, value, where=f"link {q['nodes'][0]} -- {q['nodes'][1]}")
 
 
 @_edits
@@ -340,7 +338,7 @@ def set_node(net, node=None, **changes):
             if key not in allowed:
                 raise ValueError(f"'{key}' is not a node parameter. Node parameters are: "
                                  f"{', '.join(sorted(allowed))}")
-            params[key] = clean_value(key, value, where=f"node {name}")
+            params[key] = check(key, value, where=f"node {name}")
 
 
 # ---------------------------------------------------------------- reading
@@ -383,8 +381,7 @@ def parameters(net):
 
 def _print_params(params):
     for key, value in params.items():
-        entry = DEFAULTS[key]
-        print(f"      {key:22s} = {value!s:16s} {entry['unit']:8s} {entry['meaning']}")
+        print("      " + describe(key, value))
 
 
 def _find_link(net, a, b):

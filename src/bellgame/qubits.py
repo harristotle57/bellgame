@@ -19,6 +19,8 @@ Example:
 
 import numpy as np
 
+from .defaults import check
+
 I2 = np.eye(2, dtype=complex)
 X = np.array([[0, 1], [1, 0]], dtype=complex)
 Y = np.array([[0, -1j], [1j, 0]], dtype=complex)
@@ -58,9 +60,7 @@ def bell_pair(fidelity=1.0):
         >>> rho.shape
         (4, 4)
     """
-    fidelity = _number(fidelity, "fidelity")
-    if not 0 <= fidelity <= 1:
-        raise ValueError(f"fidelity must be between 0 and 1, got {fidelity}")
+    fidelity = check("fidelity", fidelity)
     visibility = (4 * fidelity - 1) / 3
     return werner(visibility)
 
@@ -74,9 +74,7 @@ def werner(visibility):
         >>> round(fidelity(werner(1.0)), 3)
         1.0
     """
-    visibility = _number(visibility, "visibility")
-    if not -1 / 3 <= visibility <= 1:
-        raise ValueError(f"visibility must be between -1/3 and 1, got {visibility}")
+    visibility = check("visibility", visibility)
     return visibility * ket_to_dm(PHI_PLUS) + (1 - visibility) * np.eye(4) / 4
 
 
@@ -95,14 +93,6 @@ def fidelity(rho, target=PHI_PLUS):
     target = np.asarray(target, dtype=complex)
     value = np.real(np.einsum("i,...ij,j->...", target.conj(), np.asarray(rho), target))
     return float(value) if np.ndim(value) == 0 else value
-
-
-def _number(value, name):
-    """``value`` as a float, or a friendly error naming ``name``."""
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        raise TypeError(f"{name} must be a number, got {value!r}") from None
 
 
 def rx(angle_deg):
@@ -142,7 +132,7 @@ def polarization_rotation(angles_deg):
         >>> np.round(np.abs(U @ [1, 0]), 3)
         array([0., 1.])
     """
-    a, b, c = check_angles(angles_deg, 3, "a polarization rotation")
+    a, b, c = check("rotation_deg", angles_deg)
     return rz(2 * c) @ ry(2 * b) @ rx(2 * a)
 
 
@@ -172,25 +162,6 @@ def polarization_angles(u):
         a = np.degrees(np.arctan2(m[2, 1], m[2, 2])) / 2
         c = np.degrees(np.arctan2(m[1, 0], m[0, 0])) / 2
     return np.array([a, b, c])
-
-
-def check_angles(values, count, name):
-    """``values`` as a tuple of ``count`` angles (floats), or a friendly error naming ``name``.
-
-    Example:
-        >>> check_angles([0, 45], 2, "strategy['alice']")
-        (0.0, 45.0)
-    """
-    wanted = f"{name} needs exactly {count} angles in degrees"
-    if isinstance(values, str):
-        raise TypeError(f"{wanted}, got the text {values!r}")
-    try:
-        angles = tuple(float(v) for v in values)
-    except (TypeError, ValueError):
-        raise TypeError(f"{wanted}, got {values!r}") from None
-    if len(angles) != count:
-        raise ValueError(f"{wanted}, got {len(angles)}: {values!r}")
-    return angles
 
 
 def apply_local(rho, alice=None, bob=None):

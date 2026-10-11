@@ -35,7 +35,8 @@ Example:
 
 import numpy as np
 
-from .qubits import check_angles, polarization_rotation, ry
+from .defaults import check
+from .qubits import polarization_rotation, ry
 
 
 def optimal_strategy():
@@ -91,10 +92,10 @@ def check_strategy(strategy):
     for player in ("alice", "bob"):
         if player not in strategy:
             raise ValueError(f"strategy is missing '{player}': it needs two angles in degrees")
-        check_angles(strategy[player], 2, f"strategy['{player}'] (one angle per question)")
+        check("angles_deg", strategy[player], where=f"strategy['{player}']")
         key = player + "_correction"
         if key in strategy:
-            check_angles(strategy[key], 3, f"strategy['{key}']")
+            check("rotation_deg", strategy[key], where=f"strategy['{key}']")
 
 
 def quantum_players(strategy):
@@ -134,13 +135,10 @@ def measurement_setting(angle_deg, correction_deg=None):
         >>> measurement_setting(45, [0, 10, 0])
         (45.0, (0.0, 10.0, 0.0))
     """
-    try:
-        angle = float(angle_deg)
-    except (TypeError, ValueError):
-        raise TypeError(f"a measurement angle is one number in degrees, got {angle_deg!r}") from None
+    angle = check("angle_deg", angle_deg)
     if correction_deg is None:
         return angle, None
-    return angle, check_angles(correction_deg, 3, "a correction")
+    return angle, tuple(check("rotation_deg", correction_deg, where="correction"))
 
 
 def projectors(angle_deg, correction_deg=None):

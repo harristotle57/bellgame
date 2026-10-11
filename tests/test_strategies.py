@@ -13,7 +13,7 @@ from bellgame.strategies import measurement_setting, projectors
     {"alice": [0, 45], "bob": [0, 45], "bob_correction": 5},
 ])
 def test_check_strategy_rejects_non_angles(bad):
-    with pytest.raises(TypeError, match="angles in degrees"):
+    with pytest.raises(ValueError, match=r"strategy\['(alice|bob_correction)'\]: (angles|rotation)_deg"):
         bg.check_strategy(bad)
 
 
@@ -34,9 +34,9 @@ def test_check_strategy_accepts_numpy_angles():
 
 @pytest.mark.parametrize("setting", [([0, 45],), (0, 5), (0, [0, 0])])
 def test_qubit_measure_rejects_bad_settings(setting):
-    with pytest.raises((TypeError, ValueError), match="angle|correction"):
+    with pytest.raises(ValueError, match="angle|correction"):
         measurement_setting(*setting)
-    with pytest.raises((TypeError, ValueError), match="angle|correction"):
+    with pytest.raises(ValueError, match="angle|correction"):
         bg.play((lambda bit, history, qubit: qubit.measure(*setting), bg.copy_bit), bg.bell_pair())
 
 
