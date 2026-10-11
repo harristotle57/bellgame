@@ -144,13 +144,14 @@ def polarization_unitary(angles_deg, truncation):
 def analyzer_unitary(angle_deg, correction_deg, truncation):
     """What a player does before the polarizing beam splitter.
 
-    First the correction wave plates, then a rotation that turns polarization
-    ``angle_deg`` onto H. After this, the H port means outcome 0 and the V port
-    means outcome 1.
+    First the correction wave plates (``None`` for none), then a rotation that turns
+    polarization ``angle_deg`` onto H. After this, the H port means outcome 0 and
+    the V port means outcome 1.
     """
-    return polarization_unitary([0, -angle_deg, 0], truncation) @ polarization_unitary(
-        correction_deg, truncation
-    )
+    turn = polarization_unitary([0, -angle_deg, 0], truncation)
+    if correction_deg is None:
+        return turn
+    return turn @ polarization_unitary(correction_deg, truncation)
 
 
 def threshold_povm_diagonal(detector_efficiency, dark_count_prob, truncation):

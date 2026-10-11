@@ -38,7 +38,7 @@ Example:
 #   bg.play_chsh(strategy, source, rounds=N, ...)  ->  bg.play(strategy, source, rounds=N, ...)
 #   bg.play_history(strategy, run, seed=s)         ->  bg.play(strategy, run, rounds="run", seed=s)
 # Players always take their history: def alice(bit, history), and on a source of pairs
-# def alice(bit, history, qubit). The built-in players (always_zero, ...) take (bit, history).
+# def alice(bit, history, qubit). The built-in players (always_zero, ...) take (bit, history, qubit=None).
 # A sampled result's "table" is now the measured table (the one its S comes from), not the exact one.
 
 import inspect
@@ -46,7 +46,7 @@ import inspect
 import numpy as np
 
 from .defaults import _as_number
-from .strategies import _projectors, check_strategy, measurement_projectors
+from .strategies import check_strategy, measurement_projectors, measurement_setting, projectors
 
 CLASSICAL_WIN_RATE = 0.75
 TSIRELSON_WIN_RATE = (2 + np.sqrt(2)) / 4  # = cos^2(pi/8) ~ 0.854
@@ -296,53 +296,17 @@ class _Pair:
         return outcome
 
 
-def _setting(angle_deg, correction_deg):
-    """A measurement setting as a hashable (angle, correction or None)."""
-    if correction_deg is None:
-        return float(angle_deg), None
-    if len(correction_deg) != 3:
-        raise ValueError(f"a correction is three angles in degrees, got {correction_deg!r}")
-    return float(angle_deg), tuple(float(c) for c in correction_deg)
-
-
 def _projector_cache():
+    """``projectors``, remembering each setting's projectors for the rest of a game."""
     cache = {}
 
-    def projectors(angle_deg, correction_deg=None):
-        key = _setting(angle_deg, correction_deg)
+    def cached(angle_deg, correction_deg=None):
+        key = measurement_setting(angle_deg, correction_deg)
         if key not in cache:
-            cache[key] = _projectors(*key)
+            cache[key] = projectors(*key)
         return cache[key]
 
-    return projectors
-
-
-def quantum_players(strategy):
-    """The two players ``(alice, bob)`` a quantum strategy dict stands for.
-
-    Each measures its qubit at the strategy's angle for its question (after its
-    correction, if any) and answers with the outcome. Use them to mix a quantum
-    player with one of your own.
-
-    Example:
-        >>> import bellgame as bg
-        >>> alice, _ = quantum_players(bg.optimal_strategy())
-        >>> mine = lambda bit, history, qubit: qubit.measure(22.5 if bit == 0 else -22.5)
-        >>> round(bg.play((alice, mine), bg.bell_pair())["win_rate"], 4)
-        0.8536
-    """
-    check_strategy(strategy)
-
-    def player(name):
-        angles, correction = strategy[name], strategy.get(name + "_correction")
-
-        def measure(bit, history, qubit):
-            return qubit.measure(angles[bit], correction)
-
-        measure.__name__ = name
-        return measure
-
-    return player("alice"), player("bob")
+    return cached
 
 
 def _check_player(name, player, quantum):
@@ -378,7 +342,7 @@ class _Probe:
     def measure(self, angle_deg, correction_deg=None):
         if self.setting is not None:
             raise ValueError("a qubit can only be measured once per round")
-        self.setting = _setting(angle_deg, correction_deg)
+        self.setting = measurement_setting(angle_deg, correction_deg)
         return self.outcome
 
 
@@ -473,14 +437,14 @@ def _play_rounds(alice, bob, xs, ys, rng, state_of=None):
 
     ``state_of(i)`` is the pair for round ``i`` (None for a classical game).
     """
-    projectors = _projector_cache()
+    cached_projectors = _projector_cache()
     a, b = np.zeros(len(xs), dtype=int), np.zeros(len(xs), dtype=int)
     alice_past, bob_past = [], []
     for i, (x, y) in enumerate(zip(xs, ys)):
         x, y = int(x), int(y)
         qubits = ((), ())
         if state_of is not None:
-            pair = _Pair(state_of(i), rng, projectors)
+            pair = _Pair(state_of(i), rng, cached_projectors)
             qubits = ((Qubit(pair, 0),), (Qubit(pair, 1),))
         a[i] = _answer("alice", alice, x, alice_past, *qubits[0])
         b[i] = _answer("bob", bob, y, bob_past, *qubits[1])

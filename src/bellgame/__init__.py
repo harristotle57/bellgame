@@ -18,7 +18,6 @@ from .game import (
     chsh_value,
     correlations,
     play,
-    quantum_players,
     referee_wins,
     sample_counts,
     summarize_counts,
@@ -110,6 +109,7 @@ from .strategies import (
     copy_bit,
     flip_bit,
     optimal_strategy,
+    quantum_players,
 )
 
 __version__ = "0.1.0"

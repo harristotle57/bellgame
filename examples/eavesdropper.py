@@ -19,16 +19,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 import bellgame as bg
-from bellgame.strategies import measurement_projectors
+from bellgame.strategies import projectors
 
 STRATEGY = bg.optimal_strategy()
 PAIR = bg.bell_pair()
 I2 = np.eye(2)
-
-
-def projectors(angle_deg):
-    """[P0, P1] for a polarizer at ``angle_deg``, in bellgame's convention."""
-    return measurement_projectors({"alice": [angle_deg] * 2, "bob": [angle_deg] * 2}, "bob", 0)
 
 
 def tapped(f, eve_deg):

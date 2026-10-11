@@ -132,8 +132,8 @@ def click_probabilities(params, strategy, x, y):
     """
     t = int(params["truncation"])
     rho = arriving_state(params)
-    ua = fock.analyzer_unitary(strategy["alice"][x], strategy.get("alice_correction", (0, 0, 0)), t)
-    ub = fock.analyzer_unitary(strategy["bob"][y], strategy.get("bob_correction", (0, 0, 0)), t)
+    ua = fock.analyzer_unitary(strategy["alice"][x], strategy.get("alice_correction"), t)
+    ub = fock.analyzer_unitary(strategy["bob"][y], strategy.get("bob_correction"), t)
     u = np.kron(ua, ub)
     d = t + 1
     photons = np.real(np.einsum("ij,jk,ik->i", u, rho, u.conj())).reshape(d, d, d, d)
