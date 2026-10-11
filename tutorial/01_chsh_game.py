@@ -113,7 +113,8 @@ plt.show()
 
 # %%
 sampled = bg.play_chsh(strategy, bg.bell_pair(), rounds=2000, seed=3)
-ax = bg.plot_results(sampled)
+_, ax = plt.subplots(figsize=(6, 4), layout="constrained")  # room for the margin labels
+bg.plot_results(sampled, ax=ax)
 ax.set_title(f"Win rate {sampled['win_rate']:.1%} over {sampled['rounds']} rounds\n"
              f"S = {sampled['S']:.3f}  (1/2 + S/8 = {0.5 + sampled['S'] / 8:.1%})", color=bg.plots.TEXT, loc="left")
 plt.show()
