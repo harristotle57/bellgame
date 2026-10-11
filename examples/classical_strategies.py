@@ -136,10 +136,10 @@ print(f"quantum team: {quantum['rounds']} rounds, win rate {quantum['win_rate']:
 
 history = quantum["history"]
 played = history["played"]
-age_ms, win, weights = history["age_ms"][played], history["win"][played], history["weights"][played]
+age_ms, win, states = history["age_ms"][played], history["win"][played], history["states"][played]
 for lo, hi in [(0, 0.4), (0.4, 0.6), (0.6, 2.0)]:
     in_bin = (age_ms >= lo) & (age_ms < hi)
     # the exact win rate on the average pair in this bin, for comparison
-    expected = bg.play_chsh(bg.optimal_strategy(), bg.bell_diagonal(weights[in_bin].mean(axis=0)))
+    expected = bg.play_chsh(bg.optimal_strategy(), states[in_bin].mean(axis=0))
     print(f"pairs {lo:.1f}-{hi:.1f} ms old: won {win[in_bin].mean():.3f} of {in_bin.sum()} rounds "
           f"(expected {expected['win_rate']:.3f})")

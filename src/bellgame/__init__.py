@@ -91,6 +91,7 @@ from .qubits import (
     bell_pair,
     fidelity,
     misalign,
+    polarization_angles,
     polarization_rotation,
     rx,
     ry,

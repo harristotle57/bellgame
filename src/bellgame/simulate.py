@@ -292,7 +292,7 @@ class _Referee:
         self.period_ps, self.pick = period_ps, pick
         self.questions = 0
         self.discarded = 0  # pairs both players held but let go unused (pick="newest")
-        self.history = {"t_ps": [], "had_pair": [], "age_ps": [], "weights": []}
+        self.history = {"t_ps": [], "had_pair": [], "age_ps": [], "states": []}
 
     def shared_pairs(self):
         """Pairs whose two halves each name the other: like a real experiment, players never
@@ -319,15 +319,16 @@ class _Referee:
             ma, mb = used
             ma.bds_decohere()
             mb.bds_decohere()
+            # SeQUeNCe keeps the pair as its four Bell weights; record the full 4x4 state
             weights = np.clip(np.real(self.timeline.quantum_manager.get(ma.qstate_key).state), 0, None)
-            self.history["weights"].append(weights / np.sum(weights))
+            self.history["states"].append(bell_diagonal(weights / np.sum(weights)))
             self.history["age_ps"].append(self.timeline.now() - ma.generation_time)
             self.discarded += len(rest)
             for a_mem, b_mem in [used] + rest:  # used pair is measured; older ones are let go
                 self.alice.release(a_mem)
                 self.bob.release(b_mem)
         else:
-            self.history["weights"].append(np.full(4, np.nan))
+            self.history["states"].append(np.full((4, 4), np.nan))
             self.history["age_ps"].append(np.nan)
         self.timeline.schedule(Event(self.timeline.now() + self.period_ps, Process(self, "ask", [])))
 
@@ -434,8 +435,10 @@ def run_network(net, alice, bob, questions_hz=1000.0, sim_time_s=1.0, seed=None,
     * ``nodes``: for each node on the path, ``swaps_hz`` (successful swaps; zero at
       the players) and ``expired_hz`` (pairs lost because a memory ran out of time)
     * ``history``: one entry per question, as numpy arrays: ``t_ms`` (when it was
-      asked), ``had_pair``, ``age_ms`` and ``weights`` (the pair's four Bell weights;
-      NaN when there was no pair). ``bg.play_history`` plays these rounds one by one.
+      asked), ``had_pair``, ``age_ms`` and ``states`` (the 4x4 state of the pair it
+      used, all NaN when there was no pair; ``state`` above is the average of these).
+      ``bg.play_history`` plays these rounds one by one, and ``bg.fidelity`` takes the
+      whole stack at once.
     * ``seed``: the seed this run used
 
     Example:
@@ -482,15 +485,15 @@ def run_network(net, alice, bob, questions_hz=1000.0, sim_time_s=1.0, seed=None,
     if not pa.reservation_result:
         raise ValueError(f"SeQUeNCe could not reserve a path from '{alice}' to '{bob}'. Are they connected, "
                          "and does every node on the way have enough memories (memory_size)?")
-    weights = np.array(referee.history["weights"], dtype=float).reshape(-1, 4)
+    states = np.array(referee.history["states"], dtype=complex).reshape(-1, 4, 4)
     had_pair = np.array(referee.history["had_pair"], dtype=bool)
-    used = weights[had_pair]
+    used = states[had_pair]
     rounds = len(used)
     missed = referee.questions - rounds
-    if no_pair == "random" and referee.questions:
-        state = bell_diagonal((used.sum(axis=0) + missed * np.full(4, 0.25)) / referee.questions)
+    if no_pair == "random" and referee.questions:  # a guessed answer is as good as a fully mixed state
+        state = (used.sum(axis=0) + missed * np.eye(4) / 4) / referee.questions
     elif rounds:
-        state = bell_diagonal(used.mean(axis=0))
+        state = used.mean(axis=0)
     else:
         state = np.full((4, 4), np.nan)  # no round was played: there is no data, so no state either
 
@@ -519,7 +522,7 @@ def run_network(net, alice, bob, questions_hz=1000.0, sim_time_s=1.0, seed=None,
             "t_ms": np.array(referee.history["t_ps"], dtype=float) / PS_PER_MS,
             "had_pair": had_pair,
             "age_ms": age_ms,
-            "weights": weights,
+            "states": states,
         },
         "no_pair": no_pair,
         "sim_time_s": sim_time_s,

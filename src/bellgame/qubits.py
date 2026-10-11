@@ -81,12 +81,18 @@ def werner(visibility):
 def fidelity(rho, target=PHI_PLUS):
     """Fidelity <target|rho|target> of a two-qubit state with a pure target (default Phi+).
 
+    ``rho`` can also be a stack of states (shape ``(n, 4, 4)``, like a network run's
+    ``history["states"]``); then the result is an array of n fidelities.
+
     Example:
         >>> round(fidelity(bell_pair(0.75)), 3)
         0.75
+        >>> fidelity(np.stack([bell_pair(), bell_pair(0.5)])).round(3).tolist()
+        [1.0, 0.5]
     """
     target = np.asarray(target, dtype=complex)
-    return float(np.real(target.conj() @ rho @ target))
+    value = np.real(np.einsum("i,...ij,j->...", target.conj(), np.asarray(rho), target))
+    return float(value) if np.ndim(value) == 0 else value
 
 
 def rx(angle_deg):
@@ -123,6 +129,28 @@ def polarization_rotation(angles_deg):
     """
     a, b, c = _three_angles(angles_deg)
     return rz(2 * c) @ ry(2 * b) @ rx(2 * a)
+
+
+def polarization_angles(u):
+    """The three angles ``[a, b, c]`` (degrees) with ``polarization_rotation([a, b, c]) == u``, up to a phase.
+
+    The inverse of ``polarization_rotation``, for any 2x2 unitary ``u``. ``a`` and ``c``
+    come out in (-90, 90] and ``b`` in [-45, 45].
+
+    Example:
+        >>> np.round(polarization_angles(polarization_rotation([10, -20, 30])), 6).tolist()
+        [10.0, -20.0, 30.0]
+    """
+    u = np.asarray(u, dtype=complex)
+    u = u / np.sqrt(np.linalg.det(u))  # remove the global phase, leaving a rotation of the sphere
+    paulis = (X, Y, Z)
+    # m[i, j]: component i of where the sphere's axis j ends up
+    m = np.array([[np.real(np.trace(p @ u @ q @ u.conj().T)) / 2 for q in paulis] for p in paulis])
+    # m = Rz(2c) Ry(2b) Rx(2a) as 3x3 rotations; read the angles off its entries
+    b = -np.degrees(np.arcsin(np.clip(m[2, 0], -1, 1))) / 2
+    a = np.degrees(np.arctan2(m[2, 1], m[2, 2])) / 2
+    c = np.degrees(np.arctan2(m[1, 0], m[0, 0])) / 2
+    return np.array([a, b, c])
 
 
 def _three_angles(angles_deg):

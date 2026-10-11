@@ -19,7 +19,6 @@ import inspect
 
 import numpy as np
 
-from .qubits import bell_diagonal
 from .strategies import check_strategy, measurement_projectors
 
 CLASSICAL_WIN_RATE = 0.75
@@ -351,7 +350,7 @@ def play_history(strategy, run, seed=None):
     and answered at random with ``no_pair="random"``.
 
     Returns the same dict as ``bg.summarize_counts``, plus ``history``: the run's
-    history (``t_ms``, ``had_pair``, ``age_ms``, ``weights``) with, for every
+    history (``t_ms``, ``had_pair``, ``age_ms``, ``states``) with, for every
     question, ``x``, ``y``, ``a``, ``b`` (-1 when not played), ``played`` and ``win``.
 
     Example:
@@ -368,14 +367,18 @@ def play_history(strategy, run, seed=None):
     rng = np.random.default_rng(seed)
     x, y = rng.integers(0, 2, size=(2, n))
     played = np.array(h["had_pair"], dtype=bool)
-    weights = np.where(played[:, None], h["weights"], 0.25)  # no pair: random answers
+    states = np.where(played[:, None, None], h["states"], np.eye(4) / 4)  # no pair: random answers
     if run.get("no_pair", "discard") == "random":
         played = np.ones(n, dtype=bool)
     if not played.any():
         raise ValueError("no question in this run had a pair to play on")
-    # a table is linear in the state, so each round's table mixes the four Bell states' tables
-    bell_tables = np.stack([table_from_state(strategy, bell_diagonal(np.eye(4)[k])) for k in range(4)])
-    probs = np.einsum("nk,kabn->nab", weights, bell_tables[:, :, :, x, y]).reshape(n, 4)
+    check_strategy(strategy)
+    # P(a, b | x, y) = Tr(rho (Pa_x (x) Pb_y)) for each round's own state and questions
+    ops = np.array([[[[np.kron(pa, pb) for pb in measurement_projectors(strategy, "bob", yy)]
+                      for pa in measurement_projectors(strategy, "alice", xx)]
+                     for yy in (0, 1)] for xx in (0, 1)])  # [x, y, a, b] -> 4x4
+    probs = np.real(np.einsum("nij,nabji->nab", states, ops[x, y])).reshape(n, 4)
+    probs = np.clip(probs, 0, None)
     probs /= probs.sum(axis=1, keepdims=True)
     outcome = np.minimum((rng.random(n)[:, None] > np.cumsum(probs, axis=1)).sum(axis=1), 3)
     a, b = np.where(played, outcome // 2, -1), np.where(played, outcome % 2, -1)

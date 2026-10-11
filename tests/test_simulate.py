@@ -191,7 +191,7 @@ def test_history_has_one_entry_per_question(two_star_run):
     assert all(len(v) == two_star_run["questions"] for v in h.values())
     assert h["had_pair"].sum() == two_star_run["rounds"]
     assert np.all(np.isnan(h["age_ms"][~h["had_pair"]])) and not np.any(np.isnan(h["age_ms"][h["had_pair"]]))
-    assert np.allclose(two_star_run["state"], bg.bell_diagonal(h["weights"][h["had_pair"]].mean(axis=0)))
+    assert np.allclose(two_star_run["state"], h["states"][h["had_pair"]].mean(axis=0))
 
 
 def test_play_history_matches_the_average_state(two_star_run):
@@ -216,7 +216,7 @@ def test_old_pairs_are_worse():
     run = bg.run_network(net, "Alice", "Bob", questions_hz=500, sim_time_s=0.5, seed=1, pick="oldest")
     h = run["history"]
     used = h["had_pair"]
-    assert np.corrcoef(h["age_ms"][used], h["weights"][used, 0])[0, 1] < -0.5
+    assert np.corrcoef(h["age_ms"][used], bg.fidelity(h["states"][used]))[0, 1] < -0.5
 
 
 def test_every_delivered_pair_is_counted():
@@ -292,3 +292,14 @@ def test_random_answers_are_a_state_but_no_questions_are_not():
     assert guessed["rounds"] == 0 and np.isclose(guessed["fidelity"], 0.25)  # every answer was a guess
     unasked = bg.run_network(net, "Alice", "Bob", questions_hz=1, sim_time_s=0.5, seed=1, no_pair="random")
     assert unasked["questions"] == 0 and np.isnan(unasked["fidelity"])
+
+
+def test_twisting_a_run_twists_every_round(two_star_run):
+    strategy = bg.optimal_strategy()
+    twisted = bg.misaligned_source(two_star_run, {"alice": [0, 0, 0], "bob": [0, 40, 0]})
+    h = twisted["history"]
+    assert np.allclose(twisted["state"], h["states"][h["had_pair"]].mean(axis=0))
+    exact = bg.play_chsh(strategy, twisted)["win_rate"]
+    assert exact < bg.play_chsh(strategy, two_star_run)["win_rate"] - 0.1
+    played = bg.play_history(strategy, twisted, seed=1)
+    assert abs(played["win_rate"] - exact) < 4 * np.sqrt(exact * (1 - exact) / played["rounds"])

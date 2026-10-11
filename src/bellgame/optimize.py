@@ -24,8 +24,9 @@ import time
 import numpy as np
 from scipy.optimize import minimize
 
+from .defaults import _as_number, _in_range
 from .game import play_chsh
-from .qubits import misalign
+from .qubits import X, Y, Z, misalign, polarization_angles
 from .strategies import optimal_strategy
 
 ANGLE_PERIOD_DEG = 180.0  # the correction rotations repeat (up to a global phase) every 180 degrees
@@ -35,6 +36,10 @@ STEP_DEG = 45.0  # starting step size for the optimizers
 
 class _OutOfBudget(Exception):
     """Raised inside the objective when the time or evaluation budget is used up."""
+
+
+class _NoData(Exception):
+    """Raised inside the objective when S is NaN: the source has no rounds to measure."""
 
 
 def wrap_angles(angles_deg):
@@ -101,13 +106,14 @@ def _run_method(objective, method, x0, max_evaluations, time_limit_s, start):
     points = []
 
     def budgeted(x):
-        if len(points) >= max_evaluations:
-            raise _OutOfBudget
-        if time_limit_s is not None and time.perf_counter() - start > time_limit_s:
+        # the first point is always evaluated, so even a tiny budget gives a real answer
+        if points and (len(points) >= max_evaluations or _out_of_time(start, time_limit_s)):
             raise _OutOfBudget
         x = wrap_angles(x)  # simulate exactly the angles we record
         value = objective(x)
         points.append((value, x))
+        if np.isnan(value):
+            raise _NoData
         return value
 
     x0 = np.asarray(x0, dtype=float)
@@ -122,21 +128,43 @@ def _run_method(objective, method, x0, max_evaluations, time_limit_s, start):
                      options={"initial_tr_radius": STEP_DEG, "maxfev": max_evaluations})
         else:
             raise ValueError(f"method must be one of {METHODS}, got {method!r}")
-    except _OutOfBudget:
+    except (_OutOfBudget, _NoData):
         pass
     return points
 
 
+def _out_of_time(start, time_limit_s):
+    return time_limit_s is not None and time.perf_counter() - start > time_limit_s
+
+
 def find_alignment(source, strategy=None, player="alice", method="Nelder-Mead", rounds=None,
-                   seed=None, max_evaluations=300, time_limit_s=None, restarts=3):
+                   seed=None, max_evaluations=300, time_limit_s=None, restarts=3, target_S=2.8):
     """Search for the correction angles that give the biggest S.
 
-    Starts from a random guess (set ``seed`` to make it repeatable) and, if it
-    gets stuck below 2.8 in exact mode, tries again from new random guesses.
+    Starts from a random guess (set ``seed`` to make it repeatable). In exact mode
+    (``rounds=None``), if the best S found is below ``target_S``, it tries
+    again from a new random guess, up to ``restarts`` searches in all. All the
+    searches share one budget: ``max_evaluations`` calls and ``time_limit_s``
+    seconds. The first call is always made, however small the budget.
+
+    The default 2.8 suits nearly perfect pairs: no state with fidelity below
+    about 0.99 can reach S = 2.8 (0.9925 if its noise is white), so for those
+    every search runs and uses the whole budget. Lower it for noisier sources.
+
+    If S is NaN, the source has no rounds to measure (e.g. a network run that got
+    no pairs). The correction angles only change how Alice measures, not whether
+    pairs arrive, so no other angles would do better: the search stops, and there
+    is no answer (``correction`` and ``S`` are NaN, ``strategy`` is None). Run the
+    network longer, or with another seed, to get rounds.
 
     Returns a dict with ``correction`` (3 angles in degrees), ``S`` (checked
     exactly at the end), ``strategy`` (ready to use), ``evaluations`` and ``history``.
     """
+    max_evaluations = _as_number("max_evaluations", max_evaluations, int)
+    if max_evaluations < 1:
+        raise ValueError(f"max_evaluations must be at least 1, got {max_evaluations}")
+    if time_limit_s is not None and not _in_range(_as_number("time_limit_s", time_limit_s, float), "(0, inf]"):
+        raise ValueError(f"time_limit_s must be more than 0 (or None), got {time_limit_s}")
     if strategy is None:
         strategy = optimal_strategy()
     rng = np.random.default_rng(seed)
@@ -149,10 +177,14 @@ def find_alignment(source, strategy=None, player="alice", method="Nelder-Mead", 
         x0 = rng.uniform(-90, 90, size=3)
         points = _run_method(objective, method, x0, max_evaluations - evaluations, time_limit_s, start)
         evaluations += len(points)
+        if np.isnan(points[-1][0]):  # no rounds to measure
+            return {"correction": [float("nan")] * 3, "S": float("nan"), "best_seen_S": float("nan"),
+                    "strategy": None, "evaluations": evaluations, "history": history}
         for value, x in points:
             if value < best_value:
                 best_value, best_x = value, x
-        if rounds is not None or -best_value > 2.8 or evaluations >= max_evaluations:
+        if (rounds is not None or -best_value >= target_S or evaluations >= max_evaluations
+                or _out_of_time(start, time_limit_s)):
             break
     best_strategy = with_correction(strategy, best_x, player)
     return {
@@ -166,16 +198,27 @@ def find_alignment(source, strategy=None, player="alice", method="Nelder-Mead", 
 
 
 def random_misalignment(seed=None):
-    """Random twists for both players: ``{"alice": [a, b, c], "bob": [a, b, c]}`` in degrees."""
+    """Random twists for both players: ``{"alice": [a, b, c], "bob": [a, b, c]}`` in degrees.
+
+    A long fiber's twist is one net polarization change, built up from many small
+    random ones, so every polarization change is equally likely. Each twist is
+    drawn that way (a uniformly random unit quaternion) and written as the three
+    angles ``bg.polarization_rotation`` takes. Drawing the three angles uniformly
+    instead would favour some twists over others.
+    """
     rng = np.random.default_rng(seed)
-    return {
-        "alice": [float(a) for a in rng.uniform(-90, 90, size=3)],
-        "bob": [float(a) for a in rng.uniform(-90, 90, size=3)],
-    }
+    return {player: [float(a) for a in polarization_angles(_random_unitary(rng))] for player in ("alice", "bob")}
+
+
+def _random_unitary(rng):
+    """A uniformly random 2x2 polarization change, from a uniformly random unit quaternion."""
+    q = rng.normal(size=4)
+    q /= np.linalg.norm(q)
+    return q[0] * np.eye(2) - 1j * (q[1] * X + q[2] * Y + q[3] * Z)
 
 
 def misaligned_source(source, twist):
-    """Apply a misalignment ``{"alice": [...], "bob": [...]}`` to a qubit state or a link dict."""
+    """Apply a misalignment ``{"alice": [...], "bob": [...]}`` to a 4x4 state, a link dict or a network run."""
     if isinstance(source, dict) and "mean_photon_number" in source:
         out = dict(source)
         out["alice_misalignment_deg"] = list(twist["alice"])
@@ -184,7 +227,14 @@ def misaligned_source(source, twist):
     if isinstance(source, dict) and "state" in source:
         out = dict(source)
         out["state"] = misalign(source["state"], twist["alice"], twist["bob"])
+        if "history" in source:  # a network run: twist every round's pair too
+            history = source["history"]
+            out["history"] = {**history, "states": misalign(history["states"], twist["alice"], twist["bob"])}
         return out
+    if isinstance(source, dict) or np.shape(source) != (4, 4):
+        got = f"a dict with keys {sorted(source)}" if isinstance(source, dict) else f"shape {np.shape(source)}"
+        raise ValueError("misaligned_source needs a 4x4 two-qubit state, a link from bg.link, or a run from "
+                         f"bg.run_network; got {got}")
     return misalign(source, twist["alice"], twist["bob"])
 
 
