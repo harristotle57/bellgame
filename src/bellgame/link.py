@@ -235,6 +235,12 @@ def fock_pair_weights(params):
         0.995
     """
     full = photonic(params)
+    # TODO (if the PI wants twists in Fock networks): network links have no twist parameter, so a
+    # twisted Fock link can only be refused here. Four Bell weights can't hold a twist, but it could
+    # travel alongside them: weights from the untwisted link, then bg.misalign on the delivered pair.
+    # That is exact for one link (loss and click heralding don't depend on polarization; checked
+    # against the full Fock twist), but only approximate across swaps or with memory decay, which
+    # don't commute with the twist. Adding it means a twist on network links that run_network applies.
     for key in ("alice_misalignment_deg", "bob_misalignment_deg"):
         if np.any(np.asarray(full[key]) != 0):
             raise ValueError(f"fock_pair_weights needs an untwisted link, got {key}={full[key]}: four Bell-state "
