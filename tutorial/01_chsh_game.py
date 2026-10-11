@@ -20,14 +20,14 @@ import numpy as np
 
 import bellgame as bg
 
-print(bg.referee_wins(x=0, y=0, a=0, b=0))   # x AND y = 0, answers equal: win
-print(bg.referee_wins(x=1, y=1, a=0, b=0))   # x AND y = 1, answers equal: lose
+print(bg.referee_wins(x=0, y=0, a=0, b=0))  # (x AND y = 0) => answers equal: win
+print(bg.referee_wins(x=1, y=1, a=0, b=0))  # (x AND y = 1) => answers equal: lose
 
 # %% [markdown]
 # ## Classical players
 #
 # A classical player is a function from the question bit to an answer bit. There
-# are only four (`bg.CLASSICAL_PLAYERS`), so we can try every team.
+# are only four strategies (`bg.CLASSICAL_PLAYERS`), so we can try every combo
 # `bg.play_classical` gives the exact win rate.
 
 # %%
@@ -35,7 +35,8 @@ print(f"{'Alice':12} {'Bob':12} win rate")
 for alice_name, alice in bg.CLASSICAL_PLAYERS.items():
     for bob_name, bob in bg.CLASSICAL_PLAYERS.items():
         print(f"{alice_name:12} {bob_name:12} {bg.play_classical(alice, bob)['win_rate']:.2f}")
-print("classical bound:", bg.CLASSICAL_WIN_RATE, " S <=", bg.CLASSICAL_S)
+print("classical bound:", bg.CLASSICAL_WIN_RATE, "(equivalently S <=",
+      bg.CLASSICAL_S, ", since S=8*(win_rate - 1/2))")
 
 # %% [markdown]
 # No team beats **0.75**. Shared randomness doesn't help: a random strategy is a
@@ -52,13 +53,17 @@ print("classical bound:", bg.CLASSICAL_WIN_RATE, " S <=", bg.CLASSICAL_S)
 # %%
 strategy = bg.optimal_strategy()
 print(strategy)
-bg.plot_angles(strategy)
+ax = bg.plot_angles(strategy)
+ax.set_title("Optimal CHSH strategy\nPolarizer angles (H = 0 deg, V = 90 deg)",
+             color=bg.plots.TEXT, fontsize=10, loc="left")
 plt.show()
 
 result = bg.play_chsh(strategy, bg.bell_pair())
 print("win rate:", round(result["win_rate"], 4), " S:", round(result["S"], 4))
 print("Tsirelson bound:", round(bg.TSIRELSON_WIN_RATE, 4), " S =", round(bg.TSIRELSON_S, 4))
-bg.plot_correlations(result)
+ax = bg.plot_correlations(result)
+ax.set_title(f"Correlations E(x, y)    S = {result['S']:.3f}, win rate = {result['win_rate']:.1%}\n"
+             "(classical limit 2 / 75%, quantum limit 2.83 / 85.4%)", color=bg.plots.TEXT, fontsize=10, loc="left")
 plt.show()
 
 # %% [markdown]
@@ -74,16 +79,29 @@ plt.show()
 
 # %%
 sizes = [100, 1_000, 10_000]
+colors = ["#e34948", "#2a78d6", "#52514e"]  # red, blue, dark grey
+experiments = 1000
+s_values = {n: [bg.play_chsh(strategy, bg.bell_pair(), rounds=n, seed=k)["S"] for k in range(experiments)]
+            for n in sizes}
+
+# Shared bins, so a tighter spread shows up as a taller peak
+all_s = np.concatenate(list(s_values.values()))
+bins = np.arange(np.floor(all_s.min() * 50) / 50, all_s.max() + 0.02, 0.02)
 fig, ax = plt.subplots(figsize=(7, 4))
-for i, n in enumerate(sizes):
-    s_values = [bg.play_chsh(strategy, bg.bell_pair(), rounds=n, seed=k)["S"] for k in range(200)]
-    print(f"{n:6,} rounds: S = {np.mean(s_values):.3f} +- {np.std(s_values):.3f}")
-    ax.hist(s_values, bins=30, alpha=0.6, color=bg.plots.SERIES[i], label=f"{n:,} rounds")
-ax.axvline(bg.CLASSICAL_S, color="gray", linestyle="--")
-ax.axvline(bg.TSIRELSON_S, color="gray", linestyle=":")
+for (n, s), color in zip(s_values.items(), colors):
+    print(f"{n:6,} rounds: S = {np.mean(s):.3f} +- {np.std(s):.3f}")
+    weights = np.full(experiments, 1 / experiments)
+    ax.hist(s, bins=bins, weights=weights, color=color, alpha=0.2)
+    ax.hist(s, bins=bins, weights=weights, histtype="step", color=color, linewidth=2, label=f"{n:,} rounds")
+ax.axvline(bg.CLASSICAL_S, color=bg.plots.TEXT, linewidth=1, zorder=0, label="classical limit")
+ax.axvline(bg.TSIRELSON_S, color=bg.plots.TEXT, linewidth=1, linestyle="-.", zorder=0,
+           label="quantum limit")
 ax.set_xlabel("measured S")
-ax.set_ylabel("number of experiments")
-ax.legend(frameon=False)
+ax.set_ylabel("fraction of experiments")
+top = ax.secondary_xaxis("top", functions=(lambda s: 0.5 + s / 8, lambda w: 8 * (w - 0.5)))
+top.xaxis.set_major_formatter(plt.matplotlib.ticker.PercentFormatter(xmax=1, decimals=0))
+top.set_xlabel("win rate (= 1/2 + S/8)")
+ax.legend(frameon=False, loc="upper left")
 plt.show()
 
 # %% [markdown]
@@ -95,7 +113,9 @@ plt.show()
 
 # %%
 sampled = bg.play_chsh(strategy, bg.bell_pair(), rounds=2000, seed=3)
-bg.plot_results(sampled)
+ax = bg.plot_results(sampled)
+ax.set_title(f"Win rate {sampled['win_rate']:.1%} over {sampled['rounds']} rounds\n"
+             f"S = {sampled['S']:.3f}  (1/2 + S/8 = {0.5 + sampled['S'] / 8:.1%})", color=bg.plots.TEXT, loc="left")
 plt.show()
 
 # %% [markdown]
