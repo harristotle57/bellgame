@@ -52,3 +52,15 @@ def test_link_source_alignment():
     found = bg.find_alignment(twisted, seed=0, max_evaluations=150)
     best_possible = bg.play_chsh(bg.optimal_strategy(), bg.link())["S"]
     assert found["S"] == pytest.approx(best_possible, abs=0.01)
+
+
+def test_any_scipy_method_and_its_options():
+    twisted = bg.misaligned_source(bg.bell_pair(), bg.random_misalignment(1))
+    found = bg.find_alignment(twisted, method="Powell", seed=1, options={"xtol": 1e-3})
+    assert found["S"] > 2.8
+    assert len(found["path"]) == found["evaluations"] == len(found["history"])
+
+
+def test_unknown_method_is_rejected_before_any_evaluation():
+    with pytest.raises(ValueError, match="Unknown solver"):
+        bg.find_alignment(bg.bell_pair(), method="not-a-method")
