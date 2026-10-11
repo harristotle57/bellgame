@@ -58,6 +58,7 @@ def bell_pair(fidelity=1.0):
         >>> rho.shape
         (4, 4)
     """
+    fidelity = _number(fidelity, "fidelity")
     if not 0 <= fidelity <= 1:
         raise ValueError(f"fidelity must be between 0 and 1, got {fidelity}")
     visibility = (4 * fidelity - 1) / 3
@@ -73,6 +74,7 @@ def werner(visibility):
         >>> round(fidelity(werner(1.0)), 3)
         1.0
     """
+    visibility = _number(visibility, "visibility")
     if not -1 / 3 <= visibility <= 1:
         raise ValueError(f"visibility must be between -1/3 and 1, got {visibility}")
     return visibility * ket_to_dm(PHI_PLUS) + (1 - visibility) * np.eye(4) / 4
@@ -95,10 +97,18 @@ def fidelity(rho, target=PHI_PLUS):
     return float(value) if np.ndim(value) == 0 else value
 
 
+def _number(value, name):
+    """``value`` as a float, or a friendly error naming ``name``."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        raise TypeError(f"{name} must be a number, got {value!r}") from None
+
+
 def rx(angle_deg):
     """Single-qubit X rotation exp(-i angle X / 2), angle in degrees."""
     t = np.radians(angle_deg) / 2
-    return np.array([[np.cos(t), -1j * np.sin(t)], [-1j * np.sin(t), np.cos(t)]])
+    return np.array([[np.cos(t), -1j * np.sin(t)], [-1j * np.sin(t), np.cos(t)]], dtype=complex)
 
 
 def ry(angle_deg):
@@ -110,7 +120,7 @@ def ry(angle_deg):
 def rz(angle_deg):
     """Single-qubit Z rotation exp(-i angle Z / 2), angle in degrees."""
     t = np.radians(angle_deg) / 2
-    return np.array([[np.exp(-1j * t), 0], [0, np.exp(1j * t)]])
+    return np.array([[np.exp(-1j * t), 0], [0, np.exp(1j * t)]], dtype=complex)
 
 
 def polarization_rotation(angles_deg):
@@ -118,16 +128,21 @@ def polarization_rotation(angles_deg):
 
     This is what a twisted fiber does to a photon (misalignment), and also what
     a set of wave plates does when you try to undo it (correction).
-    ``angles_deg = [a, b, c]`` means: rotate by ``a`` about X, then ``b`` about Y,
-    then ``c`` about Z, all on the polarization (Poincare) sphere at half angle,
-    so ``[0, b, 0]`` turns linear polarization by ``b`` degrees.
+    ``angles_deg = [a, b, c]`` are three turns applied in order:
+
+    * ``a``: a wave plate with its axis at 45 degrees (X on the Poincare sphere),
+    * ``b``: a rotator, which turns linear polarization by ``b`` (Y),
+    * ``c``: a wave plate with its axis along H, a phase between H and V (Z).
+
+    Each is a lab angle: the polarization (Poincare) sphere turns by twice it,
+    so ``[0, b, 0]`` turns linear polarization by exactly ``b`` degrees.
 
     Example:
         >>> U = polarization_rotation([0, 90, 0])   # H -> V
         >>> np.round(np.abs(U @ [1, 0]), 3)
         array([0., 1.])
     """
-    a, b, c = _three_angles(angles_deg)
+    a, b, c = check_angles(angles_deg, 3, "a polarization rotation")
     return rz(2 * c) @ ry(2 * b) @ rx(2 * a)
 
 
@@ -148,20 +163,40 @@ def polarization_angles(u):
     m = np.array([[np.real(np.trace(p @ u @ q @ u.conj().T)) / 2 for q in paulis] for p in paulis])
     # m = Rz(2c) Ry(2b) Rx(2a) as 3x3 rotations; read the angles off its entries
     b = -np.degrees(np.arcsin(np.clip(m[2, 0], -1, 1))) / 2
-    a = np.degrees(np.arctan2(m[2, 1], m[2, 2])) / 2
-    c = np.degrees(np.arctan2(m[1, 0], m[0, 0])) / 2
+    if np.hypot(m[2, 1], m[2, 2]) < 1e-9:
+        # b = +-45: the a turn ends up about the same axis as the c turn, so only c - a
+        # (b = 45) or c + a (b = -45) counts. Put it all in c; a's usual entries are zero here.
+        a = 0.0
+        c = np.degrees(np.arctan2(-m[0, 1], m[1, 1])) / 2
+    else:
+        a = np.degrees(np.arctan2(m[2, 1], m[2, 2])) / 2
+        c = np.degrees(np.arctan2(m[1, 0], m[0, 0])) / 2
     return np.array([a, b, c])
 
 
-def _three_angles(angles_deg):
-    angles = list(angles_deg)
-    if len(angles) != 3:
-        raise ValueError(f"expected 3 angles in degrees, got {angles_deg}")
+def check_angles(values, count, name):
+    """``values`` as a tuple of ``count`` angles (floats), or a friendly error naming ``name``.
+
+    Example:
+        >>> check_angles([0, 45], 2, "strategy['alice']")
+        (0.0, 45.0)
+    """
+    wanted = f"{name} needs exactly {count} angles in degrees"
+    if isinstance(values, str):
+        raise TypeError(f"{wanted}, got the text {values!r}")
+    try:
+        angles = tuple(float(v) for v in values)
+    except (TypeError, ValueError):
+        raise TypeError(f"{wanted}, got {values!r}") from None
+    if len(angles) != count:
+        raise ValueError(f"{wanted}, got {len(angles)}: {values!r}")
     return angles
 
 
 def apply_local(rho, alice=None, bob=None):
-    """Apply a 2x2 unitary to Alice's qubit and/or Bob's qubit.
+    """Apply a 2x2 unitary to Alice's qubit and/or Bob's qubit (``None``: leave it alone).
+
+    ``rho`` can also be a stack of states (shape ``(n, 4, 4)``); each one gets the same gates.
 
     Example:
         >>> rho = apply_local(bell_pair(), bob=ry(30))
@@ -172,15 +207,20 @@ def apply_local(rho, alice=None, bob=None):
     return u @ rho @ u.conj().T
 
 
-def misalign(rho, alice_deg=(0, 0, 0), bob_deg=(0, 0, 0)):
+def misalign(rho, alice_deg=None, bob_deg=None):
     """Twist Alice's and Bob's polarization by three angles each (see polarization_rotation).
+
+    ``None`` leaves that player's photon untwisted. ``rho`` can also be a stack of
+    states (shape ``(n, 4, 4)``, like a network run's ``history["states"]``).
 
     Example:
         >>> rho = misalign(bell_pair(), bob_deg=[10, 5, 0])
         >>> fidelity(rho) < 1
         True
     """
-    return apply_local(rho, polarization_rotation(alice_deg), polarization_rotation(bob_deg))
+    alice = None if alice_deg is None else polarization_rotation(alice_deg)
+    bob = None if bob_deg is None else polarization_rotation(bob_deg)
+    return apply_local(rho, alice, bob)
 
 
 def bell_diagonal(weights):

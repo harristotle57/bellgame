@@ -87,9 +87,6 @@ from .qubits import (
     misalign,
     polarization_angles,
     polarization_rotation,
-    rx,
-    ry,
-    rz,
     werner,
 )
 from .simulate import (

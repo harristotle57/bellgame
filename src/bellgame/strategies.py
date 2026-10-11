@@ -35,7 +35,7 @@ Example:
 
 import numpy as np
 
-from .qubits import polarization_rotation, ry
+from .qubits import check_angles, polarization_rotation, ry
 
 
 def optimal_strategy():
@@ -91,24 +91,10 @@ def check_strategy(strategy):
     for player in ("alice", "bob"):
         if player not in strategy:
             raise ValueError(f"strategy is missing '{player}': it needs two angles in degrees")
-        _angles(strategy[player], 2, f"strategy['{player}'] (one angle per question)")
+        check_angles(strategy[player], 2, f"strategy['{player}'] (one angle per question)")
         key = player + "_correction"
         if key in strategy:
-            _angles(strategy[key], 3, f"strategy['{key}']")
-
-
-def _angles(values, count, name):
-    """``values`` as a tuple of ``count`` floats, or a friendly error naming ``name``."""
-    wanted = f"{name} needs exactly {count} angles in degrees"
-    if isinstance(values, str):
-        raise TypeError(f"{wanted}, got the text {values!r}")
-    try:
-        angles = tuple(float(v) for v in values)
-    except (TypeError, ValueError):
-        raise TypeError(f"{wanted}, got {values!r}") from None
-    if len(angles) != count:
-        raise ValueError(f"{wanted}, got {len(angles)}: {values!r}")
-    return angles
+            check_angles(strategy[key], 3, f"strategy['{key}']")
 
 
 def quantum_players(strategy):
@@ -154,7 +140,7 @@ def measurement_setting(angle_deg, correction_deg=None):
         raise TypeError(f"a measurement angle is one number in degrees, got {angle_deg!r}") from None
     if correction_deg is None:
         return angle, None
-    return angle, _angles(correction_deg, 3, "a correction")
+    return angle, check_angles(correction_deg, 3, "a correction")
 
 
 def projectors(angle_deg, correction_deg=None):
