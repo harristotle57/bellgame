@@ -50,7 +50,7 @@ from sequence.utils import metrics
 from sequence.utils.metrics import EventTypes
 
 from .defaults import check
-from .link import fock_pair_weights
+from .link import arm_transmissivity, dark_count_prob, fock_pair_weights
 from .network import link_params, links, node_names, node_params, to_networkx
 from .qubits import bell_diagonal, fidelity
 
@@ -85,8 +85,8 @@ def analytic_pair_weights(link):
         >>> [round(analytic_pair_weights({**link, "distance_km": km})[0], 3) for km in (1, 150, 300)]
         [0.98, 0.969, 0.717]
     """
-    eta = 10 ** (-link["loss_db_per_km"] * link["distance_km"] / 2 / 10) * link["detector_efficiency"]
-    d = 1 - (1 - link["dark_count_rate_hz"] * link["coincidence_window_ns"] * 1e-9) ** 2
+    eta = arm_transmissivity(link) * link["detector_efficiency"]
+    d = 1 - (1 - dark_count_prob(link)) ** 2  # either of the end's two detectors
     click = eta + (1 - eta) * d
     w = eta**2 / click**2 if click > 0 else 0.0
     return [w * x + (1 - w) / 4 for x in fixed_pair_weights(link)]

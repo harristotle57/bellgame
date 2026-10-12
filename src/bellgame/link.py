@@ -65,13 +65,17 @@ def check_link(params):
 
 
 def dark_count_prob(params):
-    """Chance of a dark count in one detection window.
+    """Chance of at least one dark count in one detection window.
+
+    Dark counts come at random times at ``dark_count_rate_hz`` (a Poisson process, as in
+    SeQUeNCe's detectors), so the chance is ``1 - exp(-rate * window)``: about
+    ``rate * window`` when that is small, and never more than 1.
 
     Example:
         >>> round(dark_count_prob(link(dark_count_rate_hz=1000, coincidence_window_ns=2)), 9)
         2e-06
     """
-    return params["dark_count_rate_hz"] * params["coincidence_window_ns"] * 1e-9
+    return float(-np.expm1(-params["dark_count_rate_hz"] * params["coincidence_window_ns"] * 1e-9))
 
 
 def arm_transmissivity(params):

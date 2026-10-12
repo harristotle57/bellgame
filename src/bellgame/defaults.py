@@ -73,13 +73,14 @@ DEFAULTS = {
     },
     # --- photon source (fock model) ---
     "mean_photon_number": {
-        "value": 0.01, "unit": "photons", "group": "source", "range": "(0, inf)",
+        "value": 0.01, "unit": "photons", "group": "source", "range": "[0, inf)",
         "meaning": "average photons per mode per pulse from the SPDC source (bigger = more pairs, "
                    "but more double pairs that spoil the correlations)",
     },
     "truncation": {
         "value": 2, "unit": "photons", "group": "source", "range": "[1, inf)",
-        "meaning": "most photons we keep track of in one mode (2 captures double pairs)",
+        "meaning": "most photons we keep track of in one mode (2 captures double pairs; it is accurate "
+                   "for mean_photon_number up to about 0.01, use 3 or more from about 0.1, at ~3x the time)",
     },
     "heralded": {
         "value": False, "unit": "", "group": "source",
@@ -174,6 +175,15 @@ ARGUMENTS = {
     "visibility": {
         "unit": "", "range": "[-1/3, 1]",
         "meaning": "weight of Phi+ in a Werner state; the rest is white noise",
+    },
+    # --- photons (worked out from link parameters) ---
+    "transmissivity": {
+        "unit": "", "range": "[0, 1]",
+        "meaning": "fraction of photons that get through a lossy element, e.g. a stretch of fiber",
+    },
+    "dark_count_prob": {
+        "unit": "", "range": "[0, 1]",
+        "meaning": "chance of at least one dark count in one detection window",
     },
     # --- angles ---
     "angle_deg": {

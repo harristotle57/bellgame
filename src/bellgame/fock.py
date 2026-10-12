@@ -21,9 +21,13 @@ Example:
     (81, 81)
 """
 
+import itertools
+
 import numpy as np
 from scipy.linalg import expm
 from sequence.kernel.quantum_manager import QuantumManagerDensityFock
+
+from .defaults import check
 
 MODES = ["A_H", "A_V", "B_H", "B_V"]
 
@@ -51,9 +55,8 @@ def tmsv_amplitudes(mean_photon_number, truncation):
         >>> np.round(tmsv_amplitudes(0.1, 2) ** 2, 4)
         array([0.9091, 0.0826, 0.0083])
     """
-    mu = mean_photon_number
-    if mu < 0:
-        raise ValueError(f"mean_photon_number must be >= 0, got {mu}")
+    mu = check("mean_photon_number", mean_photon_number)
+    truncation = check("truncation", truncation)
     amps = [np.sqrt(mu / (mu + 1)) ** m / np.sqrt(mu + 1) for m in range(truncation)]
     amps.append(np.sqrt(max(0.0, 1 - sum(a**2 for a in amps))))
     return np.array(amps)
@@ -91,8 +94,7 @@ def apply_loss(rho, transmissivity, modes, truncation):
     Example:
         >>> rho = apply_loss(spdc_state(0.01), 0.5, modes=[0, 1], truncation=2)
     """
-    if not 0 <= transmissivity <= 1:
-        raise ValueError(f"transmissivity must be between 0 and 1, got {transmissivity}")
+    transmissivity = check("transmissivity", transmissivity)
     qm = QuantumManagerDensityFock(truncation=truncation)
     keys = [qm.new() for _ in MODES]
     qm.set(keys, rho)
@@ -108,8 +110,8 @@ def fiber_transmissivity(distance_km, loss_db_per_km):
         >>> round(fiber_transmissivity(50, 0.2), 3)
         0.1
     """
-    if distance_km < 0:
-        raise ValueError(f"distance_km must be >= 0, got {distance_km}")
+    distance_km = check("distance_km", distance_km)
+    loss_db_per_km = check("loss_db_per_km", loss_db_per_km)
     return 10 ** (-loss_db_per_km * distance_km / 10)
 
 
@@ -136,7 +138,7 @@ def polarization_unitary(angles_deg, truncation):
         >>> U.shape
         (4, 4)
     """
-    a, b, c = np.radians(np.asarray(angles_deg, dtype=float))
+    a, b, c = np.radians(check("rotation_deg", angles_deg))
     jx, jy, jz = _two_mode_generators(truncation)
     return expm(-2j * c * jz) @ expm(-2j * b * jy) @ expm(-2j * a * jx)
 
@@ -165,10 +167,8 @@ def threshold_povm_diagonal(detector_efficiency, dark_count_prob, truncation):
         >>> np.round(threshold_povm_diagonal(0.5, 0.0, 2), 3)
         array([1.  , 0.5 , 0.25])
     """
-    if not 0 <= detector_efficiency <= 1:
-        raise ValueError(f"detector_efficiency must be between 0 and 1, got {detector_efficiency}")
-    if not 0 <= dark_count_prob <= 1:
-        raise ValueError(f"dark_count_prob must be between 0 and 1, got {dark_count_prob}")
+    detector_efficiency = check("detector_efficiency", detector_efficiency)
+    dark_count_prob = check("dark_count_prob", dark_count_prob)
     n = np.arange(truncation + 1)
     return (1 - dark_count_prob) * (1 - detector_efficiency) ** n
 
@@ -184,9 +184,6 @@ def photon_number_distribution(rho, truncation):
     d = truncation + 1
     diag = np.real(np.diag(rho)).reshape(d, d, d, d)
     p = np.zeros((2 * d - 1, 2 * d - 1))
-    for ah in range(d):
-        for av in range(d):
-            for bh in range(d):
-                for bv in range(d):
-                    p[ah + av, bh + bv] += diag[ah, av, bh, bv]
+    for ah, av, bh, bv in itertools.product(range(d), repeat=4):  # photons in A_H, A_V, B_H, B_V
+        p[ah + av, bh + bv] += diag[ah, av, bh, bv]
     return p
