@@ -62,6 +62,7 @@ def test_friendly_errors():
 
 # ---------------------------------------------------------------- classical players with coins and memory
 
+
 def coin(bit, history):
     return int(np.random.default_rng().integers(2))
 
@@ -231,8 +232,7 @@ def test_quantum_players_can_face_a_custom_referee():
 
 def test_adaptive_players_cannot_play_over_a_link():
     with pytest.raises(ValueError, match="photonic link"):
-        bg.play((lambda x, history, qubit: int(np.random.default_rng().integers(2)), bg.copy_bit), bg.link(),
-                rounds=10)
+        bg.play((lambda x, history, qubit: int(np.random.default_rng().integers(2)), bg.copy_bit), bg.link(), rounds=10)
 
 
 def test_bad_teams_and_sources_are_refused():
@@ -251,8 +251,9 @@ def test_a_strategy_table_is_outcome_probabilities_at_its_angles(source):
     strategy = bg.with_correction(bg.optimal_strategy(), [5, -10, 20], "bob")
     table = bg.table_from_strategy(strategy, source)
     for x, y in itertools.product((0, 1), repeat=2):
-        p = bg.outcome_probabilities(source, strategy["alice"][x], strategy["bob"][y],
-                                     bob_correction=strategy["bob_correction"])
+        p = bg.outcome_probabilities(
+            source, strategy["alice"][x], strategy["bob"][y], bob_correction=strategy["bob_correction"]
+        )
         assert np.allclose(table[:, :, x, y], p)
         assert p.sum() == pytest.approx(1)
 

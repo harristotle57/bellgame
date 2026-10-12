@@ -8,8 +8,9 @@ def same_rotation(u, v):
     return abs(np.trace(u.conj().T @ v)) / 2 == pytest.approx(1, abs=1e-12)
 
 
-@pytest.mark.parametrize("angles", [[10, 45, 30], [10, -45, 30], [-70, 45, -5], [20, 30, 10], [0, 0, 0],
-                                    [10, 44.99, 30], [90, -45, 90]])
+@pytest.mark.parametrize(
+    "angles", [[10, 45, 30], [10, -45, 30], [-70, 45, -5], [20, 30, 10], [0, 0, 0], [10, 44.99, 30], [90, -45, 90]]
+)
 def test_polarization_angles_inverts_polarization_rotation(angles):
     u = bg.polarization_rotation(angles)
     assert same_rotation(u, bg.polarization_rotation(bg.polarization_angles(u)))

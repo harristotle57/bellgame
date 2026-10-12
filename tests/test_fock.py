@@ -87,13 +87,16 @@ def test_analytic_weights_use_the_link_formulas():
     assert analytic_pair_weights(link)[0] == pytest.approx(w * 0.98 + (1 - w) / 4)
 
 
-@pytest.mark.parametrize("call, name", [
-    (lambda: fock.spdc_state(-0.1), "mean_photon_number"),
-    (lambda: fock.fiber_transmissivity(-1, 0.2), "distance_km"),
-    (lambda: fock.apply_loss(fock.spdc_state(0.01), 1.5, [0], 2), "transmissivity"),
-    (lambda: fock.threshold_povm_diagonal(1.2, 0, 2), "detector_efficiency"),
-    (lambda: fock.polarization_unitary([0, 1], 2), "rotation_deg"),
-])
+@pytest.mark.parametrize(
+    "call, name",
+    [
+        (lambda: fock.spdc_state(-0.1), "mean_photon_number"),
+        (lambda: fock.fiber_transmissivity(-1, 0.2), "distance_km"),
+        (lambda: fock.apply_loss(fock.spdc_state(0.01), 1.5, [0], 2), "transmissivity"),
+        (lambda: fock.threshold_povm_diagonal(1.2, 0, 2), "detector_efficiency"),
+        (lambda: fock.polarization_unitary([0, 1], 2), "rotation_deg"),
+    ],
+)
 def test_fock_checks_use_the_quantity_rules(call, name):
     with pytest.raises(ValueError, match=name):
         call()

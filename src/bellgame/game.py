@@ -32,6 +32,7 @@ Example:
 """
 
 # MERGE NOTE for the tutorial-rewrite branch (delete this note once that branch is merged):
+# After merging, run `ruff format tutorial` and add tutorial to the Formatting step in ci.yml.
 # play_classical, play_chsh, play_history, play_rounds, table_from_classical, answer,
 # uses_history and summarize are gone. Everything goes through bg.play:
 #   bg.play_classical(alice, bob, rounds=N, ...)  ->  bg.play((alice, bob), rounds=N, ...)
@@ -124,8 +125,13 @@ def table_from_strategy(strategy, source):
     check_strategy(strategy)
     table = np.zeros((2, 2, 2, 2))
     for x, y in itertools.product((0, 1), repeat=2):
-        table[:, :, x, y] = outcome_probabilities(source, strategy["alice"][x], strategy["bob"][y],
-                                                  strategy.get("alice_correction"), strategy.get("bob_correction"))
+        table[:, :, x, y] = outcome_probabilities(
+            source,
+            strategy["alice"][x],
+            strategy["bob"][y],
+            strategy.get("alice_correction"),
+            strategy.get("bob_correction"),
+        )
     return table
 
 
@@ -250,16 +256,26 @@ def summarize_counts(counts):
     is NaN. With no rounds at all, the win rate is NaN too.
     """
     rounds = sum(sum(c.values()) for c in counts.values())
-    wins = sum(k for (x, y), c in counts.items() for ab, k in c.items()
-               if referee_wins(x, y, int(ab[0]), int(ab[1])))
+    wins = sum(k for (x, y), c in counts.items() for ab, k in c.items() if referee_wins(x, y, int(ab[0]), int(ab[1])))
     table = table_from_counts(counts)
-    return {"rounds": rounds, "wins": wins, "counts": counts, "win_rate": wins / rounds if rounds else float("nan"),
-            "S": chsh_value(table), "E": np.round(correlations(table), 6).tolist(), "table": table}
+    return {
+        "rounds": rounds,
+        "wins": wins,
+        "counts": counts,
+        "win_rate": wins / rounds if rounds else float("nan"),
+        "S": chsh_value(table),
+        "E": np.round(correlations(table), 6).tolist(),
+        "table": table,
+    }
 
 
 def _summarize_table(table):
-    return {"win_rate": win_rate(table), "S": chsh_value(table), "E": np.round(correlations(table), 6).tolist(),
-            "table": table}
+    return {
+        "win_rate": win_rate(table),
+        "S": chsh_value(table),
+        "E": np.round(correlations(table), 6).tolist(),
+        "table": table,
+    }
 
 
 # ---------------------------------------------------------------- players
@@ -293,8 +309,10 @@ class _Pair:
         if self.measured[side]:
             raise ValueError("a qubit can only be measured once per round")
         self.measured[side] = True
-        ops = [np.kron(p, np.eye(2)) if side == 0 else np.kron(np.eye(2), p)
-               for p in self.projectors(angle_deg, correction_deg)]
+        ops = [
+            np.kron(p, np.eye(2)) if side == 0 else np.kron(np.eye(2), p)
+            for p in self.projectors(angle_deg, correction_deg)
+        ]
         p0 = np.real(np.trace(ops[0] @ self.rho))
         outcome = int(self.rng.random() >= p0)
         after = ops[outcome] @ self.rho @ ops[outcome]
@@ -327,8 +345,10 @@ def _check_player(name, player, quantum):
     try:
         signature.bind(*args)
     except TypeError:
-        raise TypeError(f"{name} must take {len(args)} arguments, {wanted}: the question, its own past rounds"
-                        f"{' and its half of the pair' if quantum else ''}. Got {name}{signature}") from None
+        raise TypeError(
+            f"{name} must take {len(args)} arguments, {wanted}: the question, its own past rounds"
+            f"{' and its half of the pair' if quantum else ''}. Got {name}{signature}"
+        ) from None
 
 
 def _answer(name, player, bit, history, *qubit):
@@ -374,11 +394,16 @@ def _fixed_play(name, player, quantum, link):
             answers = [_answer(name, player, bit, history, p) for p in probes]
             seen.add((probes[0].setting, probes[1].setting, *answers))
         if len(seen) > 1:
-            fix = ("over a photonic link, only such players can play (bellgame computes a link's statistics "
-                   "for fixed measurement settings)" if link else
-                   "play rounds instead: bg.play(team, source, rounds=10000)")
-            raise ValueError(f"{name} doesn't always do the same for question {bit} (it flips coins or looks "
-                             f"at its past rounds), so there is no exact answer; {fix}")
+            fix = (
+                "over a photonic link, only such players can play (bellgame computes a link's statistics "
+                "for fixed measurement settings)"
+                if link
+                else "play rounds instead: bg.play(team, source, rounds=10000)"
+            )
+            raise ValueError(
+                f"{name} doesn't always do the same for question {bit} (it flips coins or looks "
+                f"at its past rounds), so there is no exact answer; {fix}"
+            )
         setting, other, *answers = seen.pop()
         if setting != other:
             raise ValueError(f"{name} measures its qubit differently depending on the outcome it got")
@@ -475,8 +500,10 @@ def _team(team):
         return team, None, None
     if isinstance(team, (tuple, list)) and len(team) == 2:
         return None, team[0], team[1]
-    raise TypeError("a team is a quantum strategy dict (like bg.optimal_strategy()) "
-                    f"or two player functions (alice, bob), got {team!r}")
+    raise TypeError(
+        "a team is a quantum strategy dict (like bg.optimal_strategy()) "
+        f"or two player functions (alice, bob), got {team!r}"
+    )
 
 
 # ---------------------------------------------------------------- playing
@@ -545,20 +572,28 @@ def play(team, source=None, rounds=None, seed=None, questions=None):
     if rounds is None:
         if questions is not None:
             raise ValueError("a custom referee (questions=) needs an experiment: pass rounds=N")
-        table, extras = (_strategy_table(strategy, source, kind) if strategy is not None
-                         else _players_table(alice, bob, source, kind))
+        table, extras = (
+            _strategy_table(strategy, source, kind)
+            if strategy is not None
+            else _players_table(alice, bob, source, kind)
+        )
         result = _summarize_table(table)
     elif isinstance(rounds, str) and rounds == "run":
         if kind != "dict" or "history" not in source:
-            raise ValueError('rounds="run" replays a network run\'s own questions: source must be the dict '
-                             "returned by bg.run_network")
+            raise ValueError(
+                'rounds="run" replays a network run\'s own questions: source must be the dict '
+                "returned by bg.run_network"
+            )
         result, extras = _replay(strategy, alice, bob, source, np.random.default_rng(seed), questions), {}
     else:
         rounds = check("rounds", rounds)
         rng = np.random.default_rng(seed)
         if strategy is not None or kind == "link":  # fixed settings: draw from the table
-            table, extras = (_strategy_table(strategy, source, kind) if strategy is not None
-                             else _players_table(alice, bob, source, kind))
+            table, extras = (
+                _strategy_table(strategy, source, kind)
+                if strategy is not None
+                else _players_table(alice, bob, source, kind)
+            )
             xs, ys = _questions(rounds, rng, questions)
             counts = _counts_from_table(table, xs, ys, rng)
         else:
@@ -590,10 +625,13 @@ def _replay(strategy, alice, bob, run, rng, questions):
         played = np.ones(n, dtype=bool)
     a, b = np.full(n, -1), np.full(n, -1)
     if strategy is not None:
-        # P(a, b | x, y) = Tr(rho (Pa_x (x) Pb_y)) for each round's own state and questions
-        ops = np.array([[[[np.kron(pa, pb) for pb in measurement_projectors(strategy, "bob", yy)]
-                          for pa in measurement_projectors(strategy, "alice", xx)]
-                         for yy in (0, 1)] for xx in (0, 1)])  # [x, y, a, b] -> 4x4
+        # P(a, b | x, y) = Tr(rho (Pa_x (x) Pb_y)) for each round's own state and questions.
+        # ops[x, y, a, b] is the 4x4 operator Pa_x (x) Pb_y.
+        ops = np.zeros((2, 2, 2, 2, 4, 4), dtype=complex)
+        for qx, qy in itertools.product((0, 1), repeat=2):
+            pa, pb = measurement_projectors(strategy, "alice", qx), measurement_projectors(strategy, "bob", qy)
+            for oa, ob in itertools.product((0, 1), repeat=2):
+                ops[qx, qy, oa, ob] = np.kron(pa[oa], pb[ob])
         probs = np.real(np.einsum("nij,nabji->nab", states, ops[x, y])).reshape(n, 4)
         probs = np.clip(probs, 0, None)
         probs /= probs.sum(axis=1, keepdims=True)

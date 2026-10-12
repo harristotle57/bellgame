@@ -33,6 +33,9 @@ network starts from it), set its value, like matplotlib's ``rcParams``::
 
 import numpy as np
 
+# The tables keep one compact line per entry (easier to scan than one key per line), so the
+# formatter leaves them alone.
+# fmt: off
 DEFAULTS = {
     # --- fiber ---
     "distance_km": {
@@ -138,12 +141,14 @@ DEFAULTS = {
         "meaning": "quality of the measurements a node uses for entanglement swapping",
     },
 }
+# fmt: on
 
-LINK_GROUPS = ("fiber", "detector", "pair", "source")       # a link inside a network
+LINK_GROUPS = ("fiber", "detector", "pair", "source")  # a link inside a network
 PHOTONIC_GROUPS = ("fiber", "detector", "source", "photonic")  # bg.link, a link on its own
 
 # Numbers passed to functions rather than set on a link or node. Same rules as DEFAULTS
 # (``range``, ``whole``, ``count`` for a list), but no value: each function has its own default.
+# fmt: off
 ARGUMENTS = {
     # --- playing and simulating ---
     "rounds": {
@@ -198,6 +203,7 @@ ARGUMENTS = {
         "meaning": "a polarization rotation: a twist or a correction (see bg.polarization_rotation)",
     },
 }
+# fmt: on
 
 
 def default_values(*groups):

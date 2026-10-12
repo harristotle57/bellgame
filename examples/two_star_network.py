@@ -10,17 +10,17 @@ import numpy as np
 
 import bellgame as bg
 
-net = bg.two_star(hub_a="HubA", leaves_a=["A1", "A2", "A3"],
-                  hub_b="HubB", leaves_b=["B1", "B2", "B3"],
-                  leaf_km=5, hub_km=20)            # leaves only connect to their own hub
+net = bg.two_star(
+    hub_a="HubA", leaves_a=["A1", "A2", "A3"], hub_b="HubB", leaves_b=["B1", "B2", "B3"], leaf_km=5, hub_km=20
+)  # leaves only connect to their own hub
 
 # The same network from a distance matrix:
 names = ["HubA", "A1", "A2", "A3", "HubB", "B1", "B2", "B3"]
-dist = np.full((8, 8), np.inf)                     # inf: no fiber
+dist = np.full((8, 8), np.inf)  # inf: no fiber
 np.fill_diagonal(dist, 0)
-dist[0, 1:4] = dist[1:4, 0] = 5                    # star A
-dist[4, 5:8] = dist[5:8, 4] = 5                    # star B
-dist[0, 4] = dist[4, 0] = 20                       # hub to hub
+dist[0, 1:4] = dist[1:4, 0] = 5  # star A
+dist[4, 5:8] = dist[5:8, 4] = 5  # star B
+dist[0, 4] = dist[4, 0] = 20  # hub to hub
 assert bg.from_matrix(names, dist) == net
 
 # ...or with SeQUeNCe's own graph builders (node names become "0", "1", ...):
@@ -32,7 +32,7 @@ print("SeQUeNCe star:", bg.links(one_star))
 # %%
 strategy = bg.optimal_strategy()
 run = bg.run_network(net, "A1", "B2", sim_time_s=0.5, seed=1)  # A1 -> HubA -> HubB -> B2: 3 links, 2 swaps
-print("route:", run["path"], f" {run["rounds_hz"]:.0f} rounds/s,  pair fidelity {run['fidelity']:.3f}")
+print("route:", run["path"], f" {run['rounds_hz']:.0f} rounds/s,  pair fidelity {run['fidelity']:.3f}")
 print("S:", round(bg.play(strategy, run)["S"], 3))
 bg.plot_network(net, highlight=run["path"])
 

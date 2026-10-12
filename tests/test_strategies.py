@@ -6,23 +6,29 @@ from bellgame.qubits import polarization_rotation
 from bellgame.strategies import measurement_setting, projectors
 
 
-@pytest.mark.parametrize("bad", [
-    {"alice": 0, "bob": [0, 45]},
-    {"alice": "ab", "bob": [0, 45]},
-    {"alice": [0, "x"], "bob": [0, 45]},
-    {"alice": [0, 45], "bob": [0, 45], "bob_correction": 5},
-])
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {"alice": 0, "bob": [0, 45]},
+        {"alice": "ab", "bob": [0, 45]},
+        {"alice": [0, "x"], "bob": [0, 45]},
+        {"alice": [0, 45], "bob": [0, 45], "bob_correction": 5},
+    ],
+)
 def test_check_strategy_rejects_non_angles(bad):
     with pytest.raises(ValueError, match=r"strategy\['(alice|bob_correction)'\]: (angles|rotation)_deg"):
         bg.check_strategy(bad)
 
 
-@pytest.mark.parametrize("bad", [
-    {"alice": [0, 45, 90], "bob": [0, 45]},
-    {"alice": [0, 45], "bob": [0, 45], "alice_correction": [0, 0]},
-    {"alice": [0, 45], "bob": [0, 45], "carol": [0, 45]},
-    {"alice": [0, 45]},
-])
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {"alice": [0, 45, 90], "bob": [0, 45]},
+        {"alice": [0, 45], "bob": [0, 45], "alice_correction": [0, 0]},
+        {"alice": [0, 45], "bob": [0, 45], "carol": [0, 45]},
+        {"alice": [0, 45]},
+    ],
+)
 def test_check_strategy_rejects_wrong_counts_and_keys(bad):
     with pytest.raises(ValueError):
         bg.check_strategy(bad)

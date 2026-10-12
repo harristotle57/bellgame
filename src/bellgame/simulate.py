@@ -56,8 +56,8 @@ from .qubits import bell_diagonal, fidelity
 
 PS_PER_S = 1e12
 PS_PER_MS = 1e9
-FIBER_KM_PER_S = 2e5            # light in fiber travels about 200,000 km/s
-START_PS = int(1e9)             # the game starts 1 ms in, plus time to reserve the path
+FIBER_KM_PER_S = 2e5  # light in fiber travels about 200,000 km/s
+START_PS = int(1e9)  # the game starts 1 ms in, plus time to reserve the path
 BSM_COUNT_RATE_HZ = 5e7
 BSM_TIME_RESOLUTION_PS = 100
 GENERATION = "bellgame_heralded"
@@ -145,8 +145,11 @@ def bell_diagonal_mode():
         ...     topo.get_timeline().init()
     """
     settings = [  # (read it, set it, bellgame's value)
-        (QuantumManager.get_active_formalism, QuantumManager.set_global_manager_formalism,
-         BELL_DIAGONAL_STATE_FORMALISM),
+        (
+            QuantumManager.get_active_formalism,
+            QuantumManager.set_global_manager_formalism,
+            BELL_DIAGONAL_STATE_FORMALISM,
+        ),
         (EntanglementGenerationA.get_global_type, EntanglementGenerationA.set_global_type, GENERATION),
         (EntanglementGenerationB.get_global_type, EntanglementGenerationB.set_global_type, SINGLE_HERALDED),
         (EntanglementSwappingA.get_formalism, EntanglementSwappingA.set_formalism, BELL_DIAGONAL_STATE_FORMALISM),
@@ -170,26 +173,54 @@ def sequence_config(net, seed):
     for i, name in enumerate(node_names(net)):
         p = node_params(net, name)
         coherence_s = -1 if p["coherence_time_ms"] == float("inf") else p["coherence_time_ms"] / 1000
-        templates[f"node_{name}"] = {"MemoryArray": {
-            "frequency": float(p["memory_frequency_hz"]),
-            "coherence_time": coherence_s,
-            "efficiency": float(p["memory_efficiency"]),
-            "fidelity": 1.0,  # replaced per link by _LinkGenerationA
-            "decoherence_errors": [float(e) for e in p["memory_errors"]],
-        }}
-        nodes.append({"name": name, "type": "QuantumRouter", "seed": seed * 1000 + i,
-                      "memo_size": int(p["memory_size"]), "template": f"node_{name}"})
+        templates[f"node_{name}"] = {
+            "MemoryArray": {
+                "frequency": float(p["memory_frequency_hz"]),
+                "coherence_time": coherence_s,
+                "efficiency": float(p["memory_efficiency"]),
+                "fidelity": 1.0,  # replaced per link by _LinkGenerationA
+                "decoherence_errors": [float(e) for e in p["memory_errors"]],
+            }
+        }
+        nodes.append(
+            {
+                "name": name,
+                "type": "QuantumRouter",
+                "seed": seed * 1000 + i,
+                "memo_size": int(p["memory_size"]),
+                "template": f"node_{name}",
+            }
+        )
     for i, (a, b) in enumerate(links(net)):
         p = link_params(net, a, b)
-        detector = {"efficiency": float(p["detector_efficiency"]), "dark_count": float(p["dark_count_rate_hz"]),
-                    "count_rate": BSM_COUNT_RATE_HZ, "time_resolution": BSM_TIME_RESOLUTION_PS}
-        templates[f"bsm_{a}_{b}"] = {"encoding_type": SINGLE_HERALDED,
-                                    "SingleHeraldedBSM": {"detectors": [dict(detector), dict(detector)]}}
-        qconnections.append({"node1": a, "node2": b, "type": "meet_in_the_middle",
-                             "attenuation": p["loss_db_per_km"] / 1000, "distance": p["distance_km"] * 1000,
-                             "template": f"bsm_{a}_{b}", "seed": seed * 1000 + 500 + i})
-    return {"nodes": nodes, "qconnections": qconnections, "cconnections": _classical_channels(net),
-            "templates": templates, "formalism": BELL_DIAGONAL_STATE_FORMALISM}
+        detector = {
+            "efficiency": float(p["detector_efficiency"]),
+            "dark_count": float(p["dark_count_rate_hz"]),
+            "count_rate": BSM_COUNT_RATE_HZ,
+            "time_resolution": BSM_TIME_RESOLUTION_PS,
+        }
+        templates[f"bsm_{a}_{b}"] = {
+            "encoding_type": SINGLE_HERALDED,
+            "SingleHeraldedBSM": {"detectors": [dict(detector), dict(detector)]},
+        }
+        qconnections.append(
+            {
+                "node1": a,
+                "node2": b,
+                "type": "meet_in_the_middle",
+                "attenuation": p["loss_db_per_km"] / 1000,
+                "distance": p["distance_km"] * 1000,
+                "template": f"bsm_{a}_{b}",
+                "seed": seed * 1000 + 500 + i,
+            }
+        )
+    return {
+        "nodes": nodes,
+        "qconnections": qconnections,
+        "cconnections": _classical_channels(net),
+        "templates": templates,
+        "formalism": BELL_DIAGONAL_STATE_FORMALISM,
+    }
 
 
 def new_seed():
@@ -400,8 +431,7 @@ def path_memories(net, path):
     return min([sizes[0], sizes[-1]] + [m // 2 for m in sizes[1:-1]])
 
 
-def run_network(net, alice, bob, questions_hz=1000.0, sim_time_s=1.0, seed=None, no_pair="discard",
-                pick="newest"):
+def run_network(net, alice, bob, questions_hz=1000.0, sim_time_s=1.0, seed=None, no_pair="discard", pick="newest"):
     """Simulate ``sim_time_s`` seconds of CHSH rounds between ``alice`` and ``bob`` over the network.
 
     * ``questions_hz``: how often the referee asks a question (more than 0, and at most
@@ -483,8 +513,10 @@ def run_network(net, alice, bob, questions_hz=1000.0, sim_time_s=1.0, seed=None,
         timeline.run()
 
     if not pa.reservation_result:
-        raise ValueError(f"SeQUeNCe could not reserve a path from '{alice}' to '{bob}'. Are they connected, "
-                         "and does every node on the way have enough memories (memory_size)?")
+        raise ValueError(
+            f"SeQUeNCe could not reserve a path from '{alice}' to '{bob}'. Are they connected, "
+            "and does every node on the way have enough memories (memory_size)?"
+        )
     states = np.array(referee.history["states"], dtype=complex).reshape(-1, 4, 4)
     had_pair = np.array(referee.history["had_pair"], dtype=bool)
     used = states[had_pair]
@@ -515,8 +547,10 @@ def run_network(net, alice, bob, questions_hz=1000.0, sim_time_s=1.0, seed=None,
         "rounds": rounds,
         "pair_age_ms": float(np.nanmean(age_ms)) if rounds else float("nan"),
         "discarded_hz": per_s(referee.discarded),
-        "links": [{"nodes": [u, v], "fidelity": routers[u].bellgame_pairs[v][0], "pairs_hz": per_s(made[u, v])}
-                  for u, v in zip(pa.path, pa.path[1:])],
+        "links": [
+            {"nodes": [u, v], "fidelity": routers[u].bellgame_pairs[v][0], "pairs_hz": per_s(made[u, v])}
+            for u, v in zip(pa.path, pa.path[1:])
+        ],
         "nodes": [{"node": n, "swaps_hz": per_s(swaps[n]), "expired_hz": per_s(expired[n])} for n in pa.path],
         "history": {
             "t_ms": np.array(referee.history["t_ps"], dtype=float) / PS_PER_MS,

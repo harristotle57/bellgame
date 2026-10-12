@@ -35,8 +35,7 @@ def link(**changes):
     params = default_values(*PHOTONIC_GROUPS)
     for name, value in changes.items():
         if name not in params:
-            raise ValueError(f"'{name}' is not a link parameter. Link parameters are: "
-                             f"{', '.join(sorted(params))}")
+            raise ValueError(f"'{name}' is not a link parameter. Link parameters are: {', '.join(sorted(params))}")
         params[name] = check(name, value, where="link")
     return params
 
@@ -85,8 +84,11 @@ def arm_transmissivity(params):
 
 def _state_key(params):
     return (
-        float(params["mean_photon_number"]), int(params["truncation"]), bool(params["heralded"]),
-        float(params["distance_km"]), float(params["loss_db_per_km"]),
+        float(params["mean_photon_number"]),
+        int(params["truncation"]),
+        bool(params["heralded"]),
+        float(params["distance_km"]),
+        float(params["loss_db_per_km"]),
         tuple(float(a) for a in params["alice_misalignment_deg"]),
         tuple(float(a) for a in params["bob_misalignment_deg"]),
     )
@@ -242,19 +244,26 @@ def fock_pair_weights(params):
     # don't commute with the twist. Adding it means a twist on network links that run_network applies.
     for key in ("alice_misalignment_deg", "bob_misalignment_deg"):
         if np.any(np.asarray(full[key]) != 0):
-            raise ValueError(f"fock_pair_weights needs an untwisted link, got {key}={full[key]}: four Bell-state "
-                             "weights can't describe a twisted pair. Leave the twist out here and add it to the "
-                             "delivered pairs with bg.misalign or bg.misaligned_source.")
+            raise ValueError(
+                f"fock_pair_weights needs an untwisted link, got {key}={full[key]}: four Bell-state "
+                "weights can't describe a twisted pair. Leave the twist out here and add it to the "
+                "delivered pairs with bg.misalign or bg.misaligned_source."
+            )
     full["no_click"] = "discard"
     t = {}
     for name, setting in _PAULI_SETTINGS.items():
         p = link_outcome_probabilities(full, setting, setting)
         t[name] = float(p[0, 0] - p[0, 1] - p[1, 0] + p[1, 1])  # correlation: +1 same bits, -1 different
-    weights = np.array([
-        1 + t["xx"] - t["yy"] + t["zz"],  # Phi+
-        1 - t["xx"] + t["yy"] + t["zz"],  # Phi-
-        1 + t["xx"] + t["yy"] - t["zz"],  # Psi+
-        1 - t["xx"] - t["yy"] - t["zz"],  # Psi-
-    ]) / 4
+    weights = (
+        np.array(
+            [
+                1 + t["xx"] - t["yy"] + t["zz"],  # Phi+
+                1 - t["xx"] + t["yy"] + t["zz"],  # Phi-
+                1 + t["xx"] + t["yy"] - t["zz"],  # Psi+
+                1 - t["xx"] - t["yy"] - t["zz"],  # Psi-
+            ]
+        )
+        / 4
+    )
     weights = np.clip(weights, 0, None)
     return (weights / weights.sum()).tolist(), coincidence_prob(full)

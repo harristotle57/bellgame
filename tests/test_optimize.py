@@ -91,6 +91,7 @@ def test_random_misalignment_is_a_uniformly_random_twist():
     # A uniformly random twist sends H to every point of the polarization sphere equally often,
     # so each of the sphere's coordinates is spread evenly over [-1, 1].
     from bellgame.qubits import X, Y, Z
+
     points = []
     for k in range(2000):
         u = bg.polarization_rotation(bg.random_misalignment(k)["bob"])

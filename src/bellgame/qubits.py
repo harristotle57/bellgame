@@ -32,7 +32,7 @@ PHI_PLUS = np.array([1, 0, 0, 1], dtype=complex) / np.sqrt(2)
 BELL_STATES = [
     PHI_PLUS,
     np.array([1, 0, 0, -1], dtype=complex) / np.sqrt(2),  # Phi-
-    np.array([0, 1, 1, 0], dtype=complex) / np.sqrt(2),   # Psi+
+    np.array([0, 1, 1, 0], dtype=complex) / np.sqrt(2),  # Psi+
     np.array([0, 1, -1, 0], dtype=complex) / np.sqrt(2),  # Psi-
 ]
 

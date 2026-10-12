@@ -120,12 +120,14 @@ def _run_method(objective, method, x0, max_evaluations, time_limit_s, start):
     try:
         if method == "Nelder-Mead":
             simplex = [x0] + [x0 + STEP_DEG * np.eye(3)[i] for i in range(3)]
-            minimize(budgeted, x0, method="Nelder-Mead",
-                     options={"initial_simplex": np.array(simplex), "maxfev": max_evaluations,
-                              "xatol": 1e-3, "fatol": 1e-6})
+            minimize(
+                budgeted,
+                x0,
+                method="Nelder-Mead",
+                options={"initial_simplex": np.array(simplex), "maxfev": max_evaluations, "xatol": 1e-3, "fatol": 1e-6},
+            )
         elif method == "COBYQA":
-            minimize(budgeted, x0, method="COBYQA",
-                     options={"initial_tr_radius": STEP_DEG, "maxfev": max_evaluations})
+            minimize(budgeted, x0, method="COBYQA", options={"initial_tr_radius": STEP_DEG, "maxfev": max_evaluations})
         else:
             raise ValueError(f"method must be one of {METHODS}, got {method!r}")
     except (_OutOfBudget, _NoData):
@@ -137,8 +139,18 @@ def _out_of_time(start, time_limit_s):
     return time_limit_s is not None and time.perf_counter() - start > time_limit_s
 
 
-def find_alignment(source, strategy=None, player="alice", method="Nelder-Mead", rounds=None,
-                   seed=None, max_evaluations=300, time_limit_s=None, restarts=3, target_S=2.8):
+def find_alignment(
+    source,
+    strategy=None,
+    player="alice",
+    method="Nelder-Mead",
+    rounds=None,
+    seed=None,
+    max_evaluations=300,
+    time_limit_s=None,
+    restarts=3,
+    target_S=2.8,
+):
     """Search for the correction angles that give the biggest S.
 
     Starts from a random guess (set ``seed`` to make it repeatable). In exact mode
@@ -167,8 +179,7 @@ def find_alignment(source, strategy=None, player="alice", method="Nelder-Mead", 
         strategy = optimal_strategy()
     rng = np.random.default_rng(seed)
     history = []
-    objective = chsh_objective(source, strategy, player, rounds=rounds,
-                               seed=int(rng.integers(2**32)), history=history)
+    objective = chsh_objective(source, strategy, player, rounds=rounds, seed=int(rng.integers(2**32)), history=history)
     start = time.perf_counter()
     best_value, best_x, evaluations = np.inf, np.zeros(3), 0
     for _ in range(max(1, restarts)):
@@ -176,13 +187,23 @@ def find_alignment(source, strategy=None, player="alice", method="Nelder-Mead", 
         points = _run_method(objective, method, x0, max_evaluations - evaluations, time_limit_s, start)
         evaluations += len(points)
         if np.isnan(points[-1][0]):  # no rounds to measure
-            return {"correction": [float("nan")] * 3, "S": float("nan"), "best_seen_S": float("nan"),
-                    "strategy": None, "evaluations": evaluations, "history": history}
+            return {
+                "correction": [float("nan")] * 3,
+                "S": float("nan"),
+                "best_seen_S": float("nan"),
+                "strategy": None,
+                "evaluations": evaluations,
+                "history": history,
+            }
         for value, x in points:
             if value < best_value:
                 best_value, best_x = value, x
-        if (rounds is not None or -best_value >= target_S or evaluations >= max_evaluations
-                or _out_of_time(start, time_limit_s)):
+        if (
+            rounds is not None
+            or -best_value >= target_S
+            or evaluations >= max_evaluations
+            or _out_of_time(start, time_limit_s)
+        ):
             break
     best_strategy = with_correction(strategy, best_x, player)
     return {
@@ -233,13 +254,14 @@ def misaligned_source(source, twist):
         return out
     if isinstance(source, dict) or np.shape(source) != (4, 4):
         got = f"a dict with keys {sorted(source)}" if isinstance(source, dict) else f"shape {np.shape(source)}"
-        raise ValueError("misaligned_source needs a 4x4 two-qubit state, a link from bg.link, or a run from "
-                         f"bg.run_network; got {got}")
+        raise ValueError(
+            "misaligned_source needs a 4x4 two-qubit state, a link from bg.link, or a run from "
+            f"bg.run_network; got {got}"
+        )
     return misalign(source, twist["alice"], twist["bob"])
 
 
-def compare_optimizers(source, methods=METHODS, runs=5, rounds=2500, seed=0,
-                       max_evaluations=200, time_limit_s=None):
+def compare_optimizers(source, methods=METHODS, runs=5, rounds=2500, seed=0, max_evaluations=200, time_limit_s=None):
     """Race optimizers at undoing random misalignment, like the original study.
 
     Each run draws a new random twist for both players (the same twists for
@@ -256,9 +278,15 @@ def compare_optimizers(source, methods=METHODS, runs=5, rounds=2500, seed=0,
         twisted = misaligned_source(source, random_misalignment(int(rng.integers(2**32))))
         run_seed = int(rng.integers(2**32))
         for method in methods:
-            found = find_alignment(twisted, method=method, rounds=rounds, seed=run_seed,
-                                   max_evaluations=max_evaluations, time_limit_s=time_limit_s,
-                                   restarts=1)
+            found = find_alignment(
+                twisted,
+                method=method,
+                rounds=rounds,
+                seed=run_seed,
+                max_evaluations=max_evaluations,
+                time_limit_s=time_limit_s,
+                restarts=1,
+            )
             out[method]["histories"].append(found["history"])
             out[method]["validated_S"].append(found["S"])
             out[method]["corrections"].append(found["correction"])

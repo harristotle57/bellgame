@@ -15,6 +15,7 @@ def builder_net():
 
 # ---------------------------------------------------------------- SeQUeNCe topology
 
+
 def test_to_sequence_gives_topology_with_link_states():
     topo = bg.to_sequence(builder_net())
     routers = {r.name: r for r in topo.get_nodes_by_type("QuantumRouter")}
@@ -22,8 +23,8 @@ def test_to_sequence_gives_topology_with_link_states():
     assert set(routers["HubA"].bellgame_pairs) == {"A1", "A2", "A3", "HubB"}
 
 
-
 # ---------------------------------------------------------------- link models
+
 
 def test_fixed_pair_weights_follow_raw_errors():
     link = bg.link_params(bg.two_player_network(), "Alice", "Bob")
@@ -54,8 +55,9 @@ def test_analytic_matches_fock_dark_count_limit():
     # With a faint source the Fock model's only noise is dark counts, like the analytic model.
     for km in (50, 200):
         net = bg.two_player_network(km)
-        bg.set_link(net, "Alice", "Bob", dark_count_rate_hz=1e5, raw_fidelity=1.0, mean_photon_number=1e-4,
-                    heralded=True)
+        bg.set_link(
+            net, "Alice", "Bob", dark_count_rate_hz=1e5, raw_fidelity=1.0, mean_photon_number=1e-4, heralded=True
+        )
         link = bg.link_params(net, "Alice", "Bob")
         analytic = bg.analytic_pair_weights(link)[0]
         fock = bg.fock_pair_weights(link)[0][0]
@@ -63,6 +65,7 @@ def test_analytic_matches_fock_dark_count_limit():
 
 
 # ---------------------------------------------------------------- playing over SeQUeNCe
+
 
 @pytest.fixture(scope="module")
 def two_star_run():
@@ -143,8 +146,11 @@ def test_sequence_settings_are_put_back():
     from sequence.kernel.quantum_manager import QuantumManager
 
     def settings():
-        return (QuantumManager.get_active_formalism(), EntanglementGenerationA.get_global_type(),
-                PurificationProtocol.get_formalism())
+        return (
+            QuantumManager.get_active_formalism(),
+            EntanglementGenerationA.get_global_type(),
+            PurificationProtocol.get_formalism(),
+        )
 
     before = settings()
     bg.to_sequence(bg.two_player_network())
@@ -153,6 +159,7 @@ def test_sequence_settings_are_put_back():
 
 
 # ---------------------------------------------------------------- memories, rates and history
+
 
 def test_players_get_all_their_memories_on_a_direct_link():
     run = bg.run_network(bg.two_player_network(50), "Alice", "Bob", sim_time_s=0.05, seed=1)
@@ -177,6 +184,7 @@ def test_rates_show_each_step_of_the_path(two_star_run):
 
 def test_metrics_stop_recording_after_a_run():
     from sequence.utils import metrics
+
     bg.run_network(bg.two_player_network(5), "Alice", "Bob", sim_time_s=0.01, seed=1)
     recorded = len(metrics.storage.get_all())
     with bg.bell_diagonal_mode():  # a plain SeQUeNCe run afterwards adds nothing to the store
@@ -247,13 +255,15 @@ def test_every_delivered_pair_is_counted():
 
 # ---------------------------------------------------------------- the referee
 
+
 def _memory(name, partner):
     return SimpleNamespace(name=name, generation_time=0, entangled_memory={"memo_id": partner})
 
 
 def _player(node, memories):
-    return SimpleNamespace(node=SimpleNamespace(name=node), held={m.name: m for m in memories},
-                           forget_lost=lambda partner: None)
+    return SimpleNamespace(
+        node=SimpleNamespace(name=node), held={m.name: m for m in memories}, forget_lost=lambda partner: None
+    )
 
 
 def test_referee_only_pairs_halves_that_name_each_other():
@@ -266,10 +276,20 @@ def test_referee_only_pairs_halves_that_name_each_other():
 
 # ---------------------------------------------------------------- run arguments
 
-@pytest.mark.parametrize("bad", [
-    {"questions_hz": 0}, {"questions_hz": -5}, {"questions_hz": 2e12}, {"questions_hz": float("nan")},
-    {"questions_hz": "fast"}, {"sim_time_s": 0}, {"sim_time_s": -1}, {"sim_time_s": float("inf")},
-])
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {"questions_hz": 0},
+        {"questions_hz": -5},
+        {"questions_hz": 2e12},
+        {"questions_hz": float("nan")},
+        {"questions_hz": "fast"},
+        {"sim_time_s": 0},
+        {"sim_time_s": -1},
+        {"sim_time_s": float("inf")},
+    ],
+)
 def test_bad_run_arguments_are_refused(bad):
     name = next(iter(bad))
     with pytest.raises(ValueError, match=name):
@@ -282,6 +302,7 @@ def test_fastest_question_rate_is_allowed():
 
 
 # ---------------------------------------------------------------- routing and runs without rounds
+
 
 def test_route_comes_from_sequence_forwarding_tables():
     # Two equally long ways from A to D: whichever SeQUeNCe picks, the run uses the same one.

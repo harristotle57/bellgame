@@ -19,7 +19,7 @@ for name in bg.DEFAULTS:
 # Change one parameter, keep everything else fixed, and plot the result.
 
 # %%
-values = [0.001, 0.01, 0.05, 0.1]        # the values to try
+values = [0.001, 0.01, 0.05, 0.1]  # the values to try
 results = []
 for value in values:
     my_link = bg.link(mean_photon_number=value)

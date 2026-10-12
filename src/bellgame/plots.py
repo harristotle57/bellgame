@@ -68,11 +68,15 @@ def _show(value, fmt):
 def _limits(metric):
     """[(value, label, line style)] of the classical and quantum limits for 'S' or 'win_rate'."""
     if metric == "S":
-        return [(CLASSICAL_S, f"classical limit S = {CLASSICAL_S:g}", "--"),
-                (TSIRELSON_S, f"quantum limit S = {TSIRELSON_S:.2f}", ":")]
+        return [
+            (CLASSICAL_S, f"classical limit S = {CLASSICAL_S:g}", "--"),
+            (TSIRELSON_S, f"quantum limit S = {TSIRELSON_S:.2f}", ":"),
+        ]
     if metric == "win_rate":
-        return [(CLASSICAL_WIN_RATE, f"classical limit {CLASSICAL_WIN_RATE:.0%}", "--"),
-                (TSIRELSON_WIN_RATE, f"quantum limit {TSIRELSON_WIN_RATE:.1%}", ":")]
+        return [
+            (CLASSICAL_WIN_RATE, f"classical limit {CLASSICAL_WIN_RATE:.0%}", "--"),
+            (TSIRELSON_WIN_RATE, f"quantum limit {TSIRELSON_WIN_RATE:.1%}", ":"),
+        ]
     return []
 
 
@@ -81,9 +85,18 @@ def reference_lines(ax, metric="S"):
     for value, label, style in _limits(metric):
         ax.axhline(value, color=REFERENCE, linestyle=style, linewidth=1.2, zorder=1)
         # labels sit in the right margin, so they never collide with the data
-        ax.annotate(label.replace(" limit ", " limit\n"), xy=(1, value),
-                    xycoords=("axes fraction", "data"), xytext=(6, 0), textcoords="offset points",
-                    ha="left", va="center", fontsize=8, color=TEXT_SECONDARY, annotation_clip=False)
+        ax.annotate(
+            label.replace(" limit ", " limit\n"),
+            xy=(1, value),
+            xycoords=("axes fraction", "data"),
+            xytext=(6, 0),
+            textcoords="offset points",
+            ha="left",
+            va="center",
+            fontsize=8,
+            color=TEXT_SECONDARY,
+            annotation_clip=False,
+        )
     return ax
 
 
@@ -102,11 +115,13 @@ def plot_results(result, ax=None, title=None):
     pos = np.arange(4)
     gap = 0.008  # thin surface gap between stacked segments
     ax.bar(pos[asked], wins[asked], width=0.6, color=SERIES[0], label="win", zorder=2)
-    ax.bar(pos[asked], 1 - wins[asked] - gap, bottom=wins[asked] + gap, width=0.6, color=SERIES[1],
-           label="loss", zorder=2)
+    ax.bar(
+        pos[asked], 1 - wins[asked] - gap, bottom=wins[asked] + gap, width=0.6, color=SERIES[1], label="loss", zorder=2
+    )
     for p, w in zip(pos[asked], wins[asked]):
-        ax.annotate(f"{w:.0%}", xy=(p, w), xytext=(0, -12), textcoords="offset points",
-                    ha="center", fontsize=8, color="white")
+        ax.annotate(
+            f"{w:.0%}", xy=(p, w), xytext=(0, -12), textcoords="offset points", ha="center", fontsize=8, color="white"
+        )
     for p in pos[~asked]:  # never asked: no data, which is not a loss
         ax.bar(p, 1, width=0.6, fill=False, edgecolor=REFERENCE, zorder=2)
         ax.text(p, 0.5, "no data", ha="center", va="center", fontsize=8, color=TEXT_SECONDARY)
@@ -140,8 +155,10 @@ def plot_correlations(result, ax=None, title=None):
     ax.set_yticks([0, 1], ["x = 0", "x = 1"])
     if title is None:
         (_, classical, _), (_, quantum, _) = _limits("S")
-        title = (f"Correlations E(x, y): S = {_show(chsh_value(table), '.2f')}, "
-                 f"win rate {_show(win_rate(table), '.1%')}\n({classical}, {quantum})")
+        title = (
+            f"Correlations E(x, y): S = {_show(chsh_value(table), '.2f')}, "
+            f"win rate {_show(win_rate(table), '.1%')}\n({classical}, {quantum})"
+        )
     ax.set_title(title, color=TEXT, fontsize=10, loc="left")
     plt.colorbar(image, ax=ax, label="E = p(same) - p(different)", shrink=0.85)
     for spine in ax.spines.values():
@@ -164,8 +181,7 @@ def plot_sweep(xs, results, metric="S", ax=None, label=None, xlabel=None, title=
     ys = [r[metric] for r in results]
     previous = sum(1 for line in ax.get_lines() if line.get_gid() == "sweep")
     color = SERIES[previous % len(SERIES)]
-    line, = ax.plot(xs, ys, color=color, linewidth=2, marker="o", markersize=5, label=label,
-                    zorder=3)
+    (line,) = ax.plot(xs, ys, color=color, linewidth=2, marker="o", markersize=5, label=label, zorder=3)
     line.set_gid("sweep")
     if previous == 0:
         reference_lines(ax, metric)
@@ -189,10 +205,21 @@ def plot_angles(strategy, ax=None, title="Polarizer angles (H = 0 deg, V = 90 de
     for player, color in (("alice", SERIES[0]), ("bob", SERIES[1])):
         for bit, angle in enumerate(strategy[player]):
             a = np.radians(angle)
-            ax.plot([-np.cos(a), np.cos(a)], [-np.sin(a), np.sin(a)], color=color, linewidth=2,
-                    label=f"{player.title()}" if bit == 0 else None)
-            ax.annotate(f"{player[0].upper()}{bit}: {angle:g} deg", xy=(1.2 * np.cos(a), 1.2 * np.sin(a)),
-                        ha="center", va="center", fontsize=8, color=TEXT)
+            ax.plot(
+                [-np.cos(a), np.cos(a)],
+                [-np.sin(a), np.sin(a)],
+                color=color,
+                linewidth=2,
+                label=f"{player.title()}" if bit == 0 else None,
+            )
+            ax.annotate(
+                f"{player[0].upper()}{bit}: {angle:g} deg",
+                xy=(1.2 * np.cos(a), 1.2 * np.sin(a)),
+                ha="center",
+                va="center",
+                fontsize=8,
+                color=TEXT,
+            )
     ax.set_aspect("equal")
     ax.set_xlim(-1.5, 1.5)
     ax.set_ylim(-1.5, 1.5)
@@ -224,7 +251,7 @@ def plot_convergence(histories, ax=None, label=None, title=None):
     std = np.nanstd(curves, axis=0)
     color = SERIES[sum(1 for line in ax.get_lines() if line.get_gid() == "conv") % len(SERIES)]
     first = not any(line.get_gid() == "conv" for line in ax.get_lines())
-    line, = ax.plot(grid, mean, color=color, linewidth=2, label=label, zorder=3)
+    (line,) = ax.plot(grid, mean, color=color, linewidth=2, label=label, zorder=3)
     line.set_gid("conv")
     ax.fill_between(grid, mean - std, mean + std, color=color, alpha=0.18, linewidth=0, zorder=2)
     if first:
@@ -250,12 +277,17 @@ def plot_network(net, ax=None, highlight=None, title=None):
     edge_colors = [SERIES[1] if frozenset(e) in path_edges else REFERENCE for e in g.edges]
     widths = [3 if frozenset(e) in path_edges else 1.5 for e in g.edges]
     nx.draw_networkx_edges(g, pos, ax=ax, edge_color=edge_colors, width=widths)
-    nx.draw_networkx_nodes(g, pos, ax=ax, node_color=SERIES[0], node_size=700,
-                           edgecolors=SURFACE, linewidths=2)
+    nx.draw_networkx_nodes(g, pos, ax=ax, node_color=SERIES[0], node_size=700, edgecolors=SURFACE, linewidths=2)
     nx.draw_networkx_labels(g, pos, ax=ax, font_size=8, font_color="white")
-    nx.draw_networkx_edge_labels(g, pos, ax=ax, font_size=8, font_color=TEXT_SECONDARY,
-                                 edge_labels={e: f"{d['length']:g} km" for e, d in g.edges.items()},
-                                 bbox={"boxstyle": "round", "fc": SURFACE, "ec": "none"})
+    nx.draw_networkx_edge_labels(
+        g,
+        pos,
+        ax=ax,
+        font_size=8,
+        font_color=TEXT_SECONDARY,
+        edge_labels={e: f"{d['length']:g} km" for e, d in g.edges.items()},
+        bbox={"boxstyle": "round", "fc": SURFACE, "ec": "none"},
+    )
     if title is None:
         title = "Network" + (f" (path {' > '.join(highlight)})" if highlight else "")
     ax.set_title(title, color=TEXT, fontsize=10, loc="left")
@@ -277,8 +309,7 @@ def plot_photon_numbers(link_params, ax=None, title=None):
         for j in range(p.shape[1]):
             if p[i, j] > 0:
                 light = p[i, j] < 1e-3
-                ax.text(j, i, f"{p[i, j]:.1e}", ha="center", va="center", fontsize=7,
-                        color=TEXT if light else "white")
+                ax.text(j, i, f"{p[i, j]:.1e}", ha="center", va="center", fontsize=7, color=TEXT if light else "white")
     ax.set_xlabel("photons at Bob")
     ax.set_ylabel("photons at Alice")
     ax.set_xticks(range(p.shape[1]))

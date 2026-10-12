@@ -24,6 +24,10 @@ jobs:
       - name: Lint
         run: uv run ruff check src tests tutorial examples projects
 
+      # tutorial/ joins once the tutorial-rewrite branch is merged and formatted
+      - name: Formatting
+        run: uv run ruff format --check src tests examples projects
+
       - name: Tests (including docstring examples)
         run: uv run pytest
 

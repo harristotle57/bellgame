@@ -46,8 +46,9 @@ def eve_information(f, eve_deg):
     """
     info = []
     for alice_deg in [bg.E91_SETTINGS["alice"][i] for i, _ in bg.E91_SETTINGS["key_pairs"]]:
-        guess = sum(np.real(np.trace(np.kron(pa, pe) @ PAIR))
-                    for pa, pe in zip(projectors(alice_deg), projectors(eve_deg)))
+        guess = sum(
+            np.real(np.trace(np.kron(pa, pe) @ PAIR)) for pa, pe in zip(projectors(alice_deg), projectors(eve_deg))
+        )
         info.append(1 - h(guess))
     return f * float(np.mean(info))
 
@@ -66,8 +67,7 @@ print(" Eve's angle   I(A:E) bits/key bit   QBER     S")
 for eve_deg in [0, 11.25, 22.5, 33.75, 45, 67.5]:
     rho = tapped(f, eve_deg)
     e91 = bg.run_e91(rho, rounds=None)
-    print(f"   {eve_deg:6.2f}         {eve_information(f, eve_deg):.3f}            "
-          f"{e91['qber']:.4f}   {e91['S']:.3f}")
+    print(f"   {eve_deg:6.2f}         {eve_information(f, eve_deg):.3f}            {e91['qber']:.4f}   {e91['S']:.3f}")
 
 # %% [markdown]
 # Her angle trades knowledge for key errors: 33.75 degrees, halfway between E91's
@@ -138,10 +138,16 @@ fig, (ax_s, ax_key) = plt.subplots(1, 2, figsize=(12, 4))
 
 exact_s = [bg.play(STRATEGY, tapped(f, best_deg))["S"] for f in fs]
 for i, n in enumerate(test_rounds):
-    spread = [np.std([bg.play(STRATEGY, tapped(f, best_deg), rounds=n, seed=k)["S"] for k in range(40)])
-              for f in fs]
-    ax_s.fill_between(fs, np.subtract(exact_s, spread), np.add(exact_s, spread),
-                      color=bg.plots.SERIES[i], alpha=0.25, linewidth=0, label=f"+-1 sd, {n:,} rounds")
+    spread = [np.std([bg.play(STRATEGY, tapped(f, best_deg), rounds=n, seed=k)["S"] for k in range(40)]) for f in fs]
+    ax_s.fill_between(
+        fs,
+        np.subtract(exact_s, spread),
+        np.add(exact_s, spread),
+        color=bg.plots.SERIES[i],
+        alpha=0.25,
+        linewidth=0,
+        label=f"+-1 sd, {n:,} rounds",
+    )
 ax_s.plot(fs, exact_s, color=bg.plots.TEXT, linewidth=2, label="exact")
 bg.reference_lines(ax_s, "S")
 ax_s.set_xlabel("fraction of pairs Eve taps, f")
@@ -154,9 +160,9 @@ for f, s in zip(fs, exact_s):
     chi.append(min(1.0, h((1 + np.sqrt(max((s / 2) ** 2 - 1, 0))) / 2)) if s > 2 else 1.0)
     actual.append(eve_information(f, best_deg))
     rate.append(max(0.0, 1 - h(qber) - chi[-1]))
-for i, (values, label) in enumerate([(chi, "bound on any Eve, chi(S)"),
-                                     (actual, "what this Eve knows, I(A:E)"),
-                                     (rate, "secret key left, r")]):
+for i, (values, label) in enumerate(
+    [(chi, "bound on any Eve, chi(S)"), (actual, "what this Eve knows, I(A:E)"), (rate, "secret key left, r")]
+):
     ax_key.plot(fs, values, color=bg.plots.SERIES[i], linewidth=2, marker="o", label=label)
 ax_key.set_xlabel("fraction of pairs Eve taps, f")
 ax_key.set_ylabel("bits per key bit")

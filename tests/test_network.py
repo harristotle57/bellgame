@@ -24,6 +24,7 @@ def builder_net():
 
 # ---------------------------------------------------------------- describing networks
 
+
 def test_every_way_in_builds_the_same_dict():
     ref = builder_net()
     from_matrix = bg.from_matrix(NAMES, two_star_matrix())
@@ -73,6 +74,7 @@ def test_a_zero_km_link_runs():
 
 def test_from_networkx_keeps_sequence_attenuation():
     from sequence.utils.graphs import build_star
+
     net = bg.from_networkx(build_star(2, length=7, attenuation=0.0003))
     assert bg.links(net) == [("0", "1"), ("0", "2")]
     p = bg.link_params(net, "0", "1")
@@ -130,8 +132,13 @@ def test_remove_node_drops_its_links():
 
 
 def test_values_are_stored_as_floats_and_ints():
-    net = bg.set_node(builder_net(), "A1", memory_size=np.float64(4.0), coherence_time_ms=np.int64(5),
-                      memory_errors=np.array([0, 0, 1]))
+    net = bg.set_node(
+        builder_net(),
+        "A1",
+        memory_size=np.float64(4.0),
+        coherence_time_ms=np.int64(5),
+        memory_errors=np.array([0, 0, 1]),
+    )
     p = bg.node_params(net, "A1")
     assert type(p["memory_size"]) is int and type(p["coherence_time_ms"]) is float
     assert p["memory_errors"] == [0.0, 0.0, 1.0] and all(type(x) is float for x in p["memory_errors"])
@@ -141,12 +148,15 @@ def test_values_are_stored_as_floats_and_ints():
         bg.set_link(net, "HubA", "A1", heralded="no")
 
 
-@pytest.mark.parametrize("change", [
-    lambda net: bg.connect(net, "A1", "B1", np.nan),
-    lambda net: bg.set_link(net, "HubA", "A1", detector_efficiency=np.nan),
-    lambda net: bg.set_node(net, coherence_time_ms=float("nan")),
-    lambda net: bg.set_node(net, "A1", memory_errors=[np.nan, 0, 1]),
-])
+@pytest.mark.parametrize(
+    "change",
+    [
+        lambda net: bg.connect(net, "A1", "B1", np.nan),
+        lambda net: bg.set_link(net, "HubA", "A1", detector_efficiency=np.nan),
+        lambda net: bg.set_node(net, coherence_time_ms=float("nan")),
+        lambda net: bg.set_node(net, "A1", memory_errors=[np.nan, 0, 1]),
+    ],
+)
 def test_nan_is_always_refused(change):
     with pytest.raises(ValueError, match="NaN"):
         change(builder_net())

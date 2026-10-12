@@ -73,8 +73,11 @@ def run_e91(source, rounds=10000, seed=None, settings=None, corrections=None):
     unknown = set(corrections) - {"alice_correction", "bob_correction"}
     if unknown:
         raise ValueError(f"corrections can only have 'alice_correction' and 'bob_correction', got {sorted(unknown)}")
-    probs = {(i, j): outcome_probabilities(source, alice_deg, bob_deg, **corrections)
-             for i, alice_deg in enumerate(settings["alice"]) for j, bob_deg in enumerate(settings["bob"])}
+    probs = {
+        (i, j): outcome_probabilities(source, alice_deg, bob_deg, **corrections)
+        for i, alice_deg in enumerate(settings["alice"])
+        for j, bob_deg in enumerate(settings["bob"])
+    }
     n_a, n_b = len(settings["alice"]), len(settings["bob"])
 
     if rounds is None:

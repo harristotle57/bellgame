@@ -13,13 +13,16 @@ def test_numbers_refuse_non_numbers_and_nan(bad):
         check("sim_time_s", bad)
 
 
-@pytest.mark.parametrize("name, good, bad", [
-    ("fidelity", [0, 1], [-0.1, 1.1]),
-    ("time_limit_s", [1e-9, np.inf], [0]),
-    ("sim_time_s", [1e-9], [0, np.inf]),
-    ("visibility", [-1 / 3, 1], [-0.34, 1.01]),
-    ("angle_deg", [-720, 45], [np.inf]),
-])
+@pytest.mark.parametrize(
+    "name, good, bad",
+    [
+        ("fidelity", [0, 1], [-0.1, 1.1]),
+        ("time_limit_s", [1e-9, np.inf], [0]),
+        ("sim_time_s", [1e-9], [0, np.inf]),
+        ("visibility", [-1 / 3, 1], [-0.34, 1.01]),
+        ("angle_deg", [-720, 45], [np.inf]),
+    ],
+)
 def test_ranges(name, good, bad):
     for value in good:
         check(name, value)

@@ -48,6 +48,7 @@ def _edits(change):
     The edit returns the network, takes ``copy=True`` to work on a copy instead, and
     puts ``net`` back exactly as it was if ``change`` raises part way through.
     """
+
     @functools.wraps(change)
     def edit(net, *args, copy=False, **kwargs):
         target = deepcopy(net) if copy else net
@@ -60,6 +61,7 @@ def _edits(change):
             target["links"][:] = before["links"]
             raise
         return target
+
     return edit
 
 
@@ -230,10 +232,15 @@ def from_matrix(names, dist_km):
         raise ValueError(f"dist[{i}, {j}] is NaN; use np.inf for no link")
     if not np.allclose(dist_km, dist_km.T):
         i, j = np.argwhere(~np.isclose(dist_km, dist_km.T))[0]
-        raise ValueError(f"distance matrix must be symmetric: dist[{i}, {j}] = {dist_km[i, j]} "
-                         f"but dist[{j}, {i}] = {dist_km[j, i]}")
-    edges = [(names[i], names[j], float(dist_km[i, j]))
-             for i in range(n) for j in range(i + 1, n) if np.isfinite(dist_km[i, j])]
+        raise ValueError(
+            f"distance matrix must be symmetric: dist[{i}, {j}] = {dist_km[i, j]} but dist[{j}, {i}] = {dist_km[j, i]}"
+        )
+    edges = [
+        (names[i], names[j], float(dist_km[i, j]))
+        for i in range(n)
+        for j in range(i + 1, n)
+        if np.isfinite(dist_km[i, j])
+    ]
     return from_edges(edges, names=[str(x) for x in names])
 
 
@@ -305,8 +312,7 @@ def set_link(net, a, b, **changes):
     allowed = default_values(*LINK_GROUPS)
     for name, value in changes.items():
         if name not in allowed:
-            raise ValueError(f"'{name}' is not a link parameter. Link parameters are: "
-                             f"{', '.join(sorted(allowed))}")
+            raise ValueError(f"'{name}' is not a link parameter. Link parameters are: {', '.join(sorted(allowed))}")
         q[name] = check(name, value, where=f"link {q['nodes'][0]} -- {q['nodes'][1]}")
 
 
@@ -336,8 +342,7 @@ def set_node(net, node=None, **changes):
         params = _require_node(net, name)
         for key, value in changes.items():
             if key not in allowed:
-                raise ValueError(f"'{key}' is not a node parameter. Node parameters are: "
-                                 f"{', '.join(sorted(allowed))}")
+                raise ValueError(f"'{key}' is not a node parameter. Node parameters are: {', '.join(sorted(allowed))}")
             params[key] = check(key, value, where=f"node {name}")
 
 
@@ -378,6 +383,7 @@ def parameters(net):
 
 
 # ---------------------------------------------------------------- internals
+
 
 def _print_params(params):
     for key, value in params.items():

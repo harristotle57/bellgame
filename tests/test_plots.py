@@ -46,12 +46,15 @@ def test_titles_show_win_rate_and_s_and_can_be_replaced():
     result = bg.play(bg.optimal_strategy(), bg.bell_pair())
     assert "Win rate 85.4%, S = 2.83" in bg.plot_results(result).get_title(loc="left")
     assert "S = 2.83, win rate 85.4%" in bg.plot_correlations(result).get_title(loc="left")
-    calls = [lambda t: bg.plot_results(result, title=t), lambda t: bg.plot_correlations(result, title=t),
-             lambda t: bg.plot_angles(bg.optimal_strategy(), title=t),
-             lambda t: bg.plot_sweep([0, 1], [result, result], title=t),
-             lambda t: bg.plot_convergence([[(0, 1.0), (1, 2.0)]], title=t),
-             lambda t: bg.plot_network(bg.two_player_network(), title=t),
-             lambda t: bg.plot_photon_numbers(bg.link(), title=t)]
+    calls = [
+        lambda t: bg.plot_results(result, title=t),
+        lambda t: bg.plot_correlations(result, title=t),
+        lambda t: bg.plot_angles(bg.optimal_strategy(), title=t),
+        lambda t: bg.plot_sweep([0, 1], [result, result], title=t),
+        lambda t: bg.plot_convergence([[(0, 1.0), (1, 2.0)]], title=t),
+        lambda t: bg.plot_network(bg.two_player_network(), title=t),
+        lambda t: bg.plot_photon_numbers(bg.link(), title=t),
+    ]
     for call in calls:
         assert call("mine").get_title(loc="left") == "mine"
 

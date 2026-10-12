@@ -23,8 +23,7 @@ ROUNDS = 20_000  # about +-0.003 statistical wobble on a win rate
 # win 75% exactly.
 
 # %%
-best = max(bg.play((a, b))["win_rate"]
-           for a, b in itertools.product(bg.CLASSICAL_PLAYERS.values(), repeat=2))
+best = max(bg.play((a, b))["win_rate"] for a, b in itertools.product(bg.CLASSICAL_PLAYERS.values(), repeat=2))
 print("best fixed team:", best)
 
 # %% [markdown]
@@ -77,9 +76,11 @@ def streak(x, history):  # copy my question, but flip after three 1s in a row
     return x ^ (recent == [1, 1, 1])
 
 
-for name, (a, b) in {"last_question + copy_bit": (last_question, bg.copy_bit),
-                     "streak + always_zero": (streak, bg.always_zero),
-                     "streak + streak": (streak, streak)}.items():
+for name, (a, b) in {
+    "last_question + copy_bit": (last_question, bg.copy_bit),
+    "streak + always_zero": (streak, bg.always_zero),
+    "streak + streak": (streak, streak),
+}.items():
     print(f"{name:26s}", bg.play((a, b), rounds=ROUNDS, seed=2)["win_rate"])
 
 # %% [markdown]
@@ -143,5 +144,7 @@ for lo, hi in [(0, 0.4), (0.4, 0.6), (0.6, 2.0)]:
     in_bin = (age_ms >= lo) & (age_ms < hi)
     # the exact win rate on the average pair in this bin, for comparison
     expected = bg.play(bg.optimal_strategy(), states[in_bin].mean(axis=0))
-    print(f"pairs {lo:.1f}-{hi:.1f} ms old: won {win[in_bin].mean():.3f} of {in_bin.sum()} rounds "
-          f"(expected {expected['win_rate']:.3f})")
+    print(
+        f"pairs {lo:.1f}-{hi:.1f} ms old: won {win[in_bin].mean():.3f} of {in_bin.sum()} rounds "
+        f"(expected {expected['win_rate']:.3f})"
+    )
