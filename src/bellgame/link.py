@@ -21,7 +21,6 @@ import numpy as np
 
 from . import fock
 from .defaults import PHOTONIC_GROUPS, check, default_values, describe
-from .strategies import check_strategy
 
 _STATE_CACHE = {}
 
@@ -118,16 +117,19 @@ def arriving_state(params):
     return rho
 
 
-def click_probabilities(params, strategy, x, y):
-    """p[cA0, cA1, cB0, cB1]: chance of each click pattern for questions x, y.
+# one player's click pattern: (outcome-0 detector clicked, outcome-1 detector clicked)
+_CLICK_PATTERNS = list(itertools.product((0, 1), repeat=2))
 
-    ``cA0`` is 1 when Alice's outcome-0 detector clicks, and so on.
+
+def click_probabilities(params, alice, bob):
+    """p[cA0, cA1, cB0, cB1]: chance of each click pattern when Alice and Bob measure at these settings.
+
+    ``alice`` and ``bob`` are ``(angle_deg, correction_deg or None)``. ``cA0`` is 1 when
+    Alice's outcome-0 detector clicks, and so on.
     """
     t = int(params["truncation"])
     rho = arriving_state(params)
-    ua = fock.analyzer_unitary(strategy["alice"][x], strategy.get("alice_correction"), t)
-    ub = fock.analyzer_unitary(strategy["bob"][y], strategy.get("bob_correction"), t)
-    u = np.kron(ua, ub)
+    u = np.kron(fock.analyzer_unitary(*alice, t), fock.analyzer_unitary(*bob, t))
     d = t + 1
     photons = np.real(np.einsum("ij,jk,ik->i", u, rho, u.conj())).reshape(d, d, d, d)
     no_click = fock.threshold_povm_diagonal(params["detector_efficiency"], dark_count_prob(params), t)
@@ -148,50 +150,43 @@ def _bit_probabilities(c0, c1, params):
     return [0.5, 0.5] if params["no_click"] == "random" else [1.0, 0.0]
 
 
-def link_outcomes(params, strategy):
-    """(table, coincidence_prob): the CHSH table for this link, and how often both sides click.
+def link_outcome_probabilities(params, alice, bob):
+    """p[a, b] on this link when Alice and Bob measure at these settings, ``(angle_deg, correction_deg or None)``.
 
-    ``coincidence_prob`` is the chance, per pulse of the source, that both players see a
-    click (from either of their two detectors), dark counts and double pairs included.
-    It is exact, not sampled, and it doesn't depend on the measurement angles. Multiply
-    by the source's pulse rate for coincidences per second. With ``no_click="discard"``
-    it is also the fraction of pulses that become rounds: ``N`` rounds take about
-    ``N / coincidence_prob`` pulses.
-
-    A question pair whose rounds are all discarded has NaN in the table: there is no
-    data for it.
+    The players turn their clicks into bits by the link's ``no_click`` and ``double_click``
+    rules. If every round is discarded (``no_click="discard"`` and nobody clicks), there is
+    no data and the result is NaN. ``bg.outcome_probabilities`` calls this for links.
     """
-    check_strategy(strategy)
-    # one player's click pattern: (outcome-0 detector clicked, outcome-1 detector clicked)
-    patterns = list(itertools.product((0, 1), repeat=2))
-    bits = {c: _bit_probabilities(*c, params) for c in patterns}  # None: the round is discarded
-    table = np.zeros((2, 2, 2, 2))
-    for x, y in itertools.product((0, 1), repeat=2):
-        clicks = click_probabilities(params, strategy, x, y)
-        kept = 0.0
-        for ca, cb in itertools.product(patterns, repeat=2):
-            if bits[ca] is None or bits[cb] is None:
-                continue
-            kept += clicks[ca + cb]
-            table[:, :, x, y] += clicks[ca + cb] * np.outer(bits[ca], bits[cb])
-        table[:, :, x, y] = table[:, :, x, y] / kept if kept > 0 else np.nan
-    # Whether a side clicks at all depends only on how many photons reach it; the angle
-    # only picks which of its two detectors fires. So any question pair gives the same
-    # coincidence probability, and the last one's clicks will do.
-    coincidence = sum(clicks[ca + cb] for ca, cb in itertools.product(patterns, repeat=2) if any(ca) and any(cb))
-    return table, float(coincidence)
+    clicks = click_probabilities(params, alice, bob)
+    p = np.zeros((2, 2))
+    kept = 0.0
+    for ca, cb in itertools.product(_CLICK_PATTERNS, repeat=2):
+        bits_a, bits_b = _bit_probabilities(*ca, params), _bit_probabilities(*cb, params)
+        if bits_a is None or bits_b is None:
+            continue
+        kept += clicks[ca + cb]
+        p += clicks[ca + cb] * np.outer(bits_a, bits_b)
+    return p / kept if kept > 0 else np.full((2, 2), np.nan)
 
 
-def link_table(params, strategy):
-    """p(a, b | x, y) for a quantum strategy played over this photonic link.
+def coincidence_prob(params):
+    """Chance, per pulse of the source, that both players see a click.
+
+    A click from either of a player's two detectors counts, dark counts and double pairs
+    included. It is exact, not sampled, and it doesn't depend on the measurement angles.
+    Multiply by the source's pulse rate for coincidences per second. With
+    ``no_click="discard"`` it is also the fraction of pulses that become rounds: ``N``
+    rounds take about ``N / coincidence_prob`` pulses.
 
     Example:
-        >>> import bellgame as bg
-        >>> t = link_table(link(), bg.optimal_strategy())
-        >>> round(bg.chsh_value(t), 2)
-        2.8
+        >>> round(coincidence_prob(link(distance_km=10)), 4)
+        0.0081
     """
-    return link_outcomes(params, strategy)[0]
+    # Whether a side clicks at all depends only on how many photons reach it; the angle
+    # only picks which of its two detectors fires. So any angles give the same answer.
+    clicks = click_probabilities(params, (0.0, None), (0.0, None))
+    both = [clicks[ca + cb] for ca, cb in itertools.product(_CLICK_PATTERNS, repeat=2) if any(ca) and any(cb)]
+    return float(sum(both))
 
 
 def photon_numbers(params):
@@ -206,12 +201,13 @@ def describe_link(params):
         print("  " + describe(name, value))
 
 
-# Measuring ZZ, XX and YY on the pair. YY uses a correction wave plate that turns
-# circular polarization onto H/V (the sign flip is the same for both players, so it cancels).
+# Measuring ZZ, XX and YY on the pair: each player's (angle_deg, correction_deg). YY uses a
+# correction wave plate that turns circular polarization onto H/V (the sign flip is the same
+# for both players, so it cancels).
 _PAULI_SETTINGS = {
-    "zz": {"alice": [0, 0], "bob": [0, 0]},
-    "xx": {"alice": [45, 45], "bob": [45, 45]},
-    "yy": {"alice": [0, 0], "bob": [0, 0], "alice_correction": [45, 0, 0], "bob_correction": [45, 0, 0]},
+    "zz": (0.0, None),
+    "xx": (45.0, None),
+    "yy": (0.0, (45.0, 0.0, 0.0)),
 }
 
 
@@ -247,10 +243,9 @@ def fock_pair_weights(params):
                              "delivered pairs with bg.misalign or bg.misaligned_source.")
     full["no_click"] = "discard"
     t = {}
-    for name, strategy in _PAULI_SETTINGS.items():
-        table, coincidence = link_outcomes(full, strategy)
-        signs = np.array([[1, -1], [-1, 1]])
-        t[name] = float(np.sum(signs * table[:, :, 0, 0]))
+    for name, setting in _PAULI_SETTINGS.items():
+        p = link_outcome_probabilities(full, setting, setting)
+        t[name] = float(p[0, 0] - p[0, 1] - p[1, 0] + p[1, 1])  # correlation: +1 same bits, -1 different
     weights = np.array([
         1 + t["xx"] - t["yy"] + t["zz"],  # Phi+
         1 - t["xx"] + t["yy"] + t["zz"],  # Phi-
@@ -258,4 +253,4 @@ def fock_pair_weights(params):
         1 - t["xx"] - t["yy"] - t["zz"],  # Psi-
     ]) / 4
     weights = np.clip(weights, 0, None)
-    return (weights / weights.sum()).tolist(), coincidence
+    return (weights / weights.sum()).tolist(), coincidence_prob(full)

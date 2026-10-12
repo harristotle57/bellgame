@@ -45,3 +45,17 @@ def test_misalignment_breaks_then_correction_fixes():
 def test_link_source():
     r = bg.run_e91(bg.link(), rounds=None)
     assert 0 < r["qber"] < 0.05 and r["secure"]
+
+
+def test_corrections_can_only_be_corrections():
+    with pytest.raises(ValueError, match="alice_correction"):
+        bg.run_e91(bg.bell_pair(), rounds=100, corrections={"alice": [90, 90]})
+    with pytest.raises(ValueError, match="rotation_deg"):
+        bg.run_e91(bg.bell_pair(), rounds=100, corrections={"bob_correction": [1, 2]})
+
+
+def test_chsh_counts_match_the_chsh_rounds():
+    r = bg.run_e91(bg.bell_pair(), rounds=3000, seed=2)
+    counted = sum(sum(c.values()) for c in r["chsh_counts"].values())
+    assert 0 < counted < r["rounds"] - r["key_length"]
+    assert r["S"] == pytest.approx(bg.chsh_value(bg.table_from_counts(r["chsh_counts"])))

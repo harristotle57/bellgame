@@ -42,8 +42,12 @@ Example:
 # A sampled result's "table" is now the measured table (the one its S comes from), not the exact one.
 # bg.from_matrix: np.inf is now "no link" and 0 is a 0 km link; bg.to_matrix writes np.inf for no link.
 # A matrix that uses 0 for "no link" must change to np.inf (np.full((n, n), np.inf), diagonal 0).
+# table_from_state, link_table and link_outcomes are gone: bg.table_from_strategy(strategy, source) takes
+# any source, bg.outcome_probabilities(source, alice_deg, bob_deg) gives one pair of settings, and
+# bg.coincidence_prob(link) is the link's coincidence probability.
 
 import inspect
+import itertools
 
 import numpy as np
 
@@ -74,53 +78,55 @@ def _no_counts():
 # ---------------------------------------------------------------- tables
 
 
-def table_from_state(strategy, rho):
-    """Probability table for a quantum strategy measured on a 4x4 two-qubit state.
+def outcome_probabilities(source, alice_deg, bob_deg, alice_correction=None, bob_correction=None):
+    """p[a, b]: the chance of outcomes a, b when Alice measures at ``alice_deg`` and Bob at ``bob_deg``.
+
+    Each player's correction wave plates (three angles, if any) act before their
+    polarizer. ``source`` is any source of pairs:
+
+    * a 4x4 two-qubit density matrix (e.g. ``bg.bell_pair(0.9)``)
+    * the dict returned by ``bg.run_network`` (its average delivered ``"state"``)
+    * a photonic link dict from ``bg.link(...)`` (Fock model, detectors included)
+
+    Every quantum table in bellgame is built from this: a CHSH table is it at four
+    pairs of angles, E91 at nine. A source with no data gives NaN.
 
     Example:
-        >>> from bellgame.qubits import bell_pair
-        >>> from bellgame.strategies import optimal_strategy
-        >>> table_from_state(optimal_strategy(), bell_pair()).shape
-        (2, 2, 2, 2)
+        >>> import bellgame as bg
+        >>> np.round(outcome_probabilities(bg.bell_pair(), 0, 0), 3).tolist()
+        [[0.5, 0.0], [0.0, 0.5]]
     """
-    check_strategy(strategy)
-    rho = np.asarray(rho)
-    if rho.shape != (4, 4):
-        raise ValueError(f"a two-qubit state must be a 4x4 matrix, got shape {rho.shape}")
-    table = np.zeros((2, 2, 2, 2))
-    for x in (0, 1):
-        pa = measurement_projectors(strategy, "alice", x)
-        for y in (0, 1):
-            pb = measurement_projectors(strategy, "bob", y)
-            for a in (0, 1):
-                for b in (0, 1):
-                    table[a, b, x, y] = np.real(np.trace(np.kron(pa[a], pb[b]) @ rho))
-    return np.clip(table, 0, 1)
+    alice = measurement_setting(alice_deg, alice_correction)
+    bob = measurement_setting(bob_deg, bob_correction)
+    kind = _source_kind(source)
+    if kind is None:
+        raise ValueError("outcome probabilities need a source of pairs, e.g. bg.bell_pair()")
+    if kind == "link":
+        from .link import link_outcome_probabilities
+
+        return link_outcome_probabilities(source, alice, bob)
+    rho = np.asarray(source["state"] if kind == "dict" else source)
+    pa, pb = projectors(*alice), projectors(*bob)
+    p = np.array([[np.real(np.trace(np.kron(pa[a], pb[b]) @ rho)) for b in (0, 1)] for a in (0, 1)])
+    return np.clip(p, 0, 1)
 
 
 def table_from_strategy(strategy, source):
-    """Probability table for a quantum strategy and any source of entanglement.
+    """Probability table ``table[a, b, x, y]`` for a quantum strategy on any source of pairs.
 
-    ``source`` can be:
-
-    * a 4x4 two-qubit density matrix (e.g. ``bg.bell_pair(0.9)``)
-    * the dict returned by ``bg.run_network`` (uses its ``"state"``)
-    * a photonic link dict from ``bg.link(...)`` (Fock model, see ``bg.link_table``)
+    It is ``outcome_probabilities`` at the strategy's angles for each pair of questions.
 
     Example:
-        >>> from bellgame.qubits import bell_pair
-        >>> from bellgame.strategies import optimal_strategy
-        >>> t = table_from_strategy(optimal_strategy(), bell_pair())
+        >>> import bellgame as bg
+        >>> table_from_strategy(bg.optimal_strategy(), bg.bell_pair()).shape
+        (2, 2, 2, 2)
     """
-    if isinstance(source, dict) and "mean_photon_number" in source:
-        from .link import link_table
-
-        return link_table(source, strategy)
-    if isinstance(source, dict) and "state" in source:
-        return table_from_state(strategy, source["state"])
-    if isinstance(source, dict):
-        raise ValueError("source dict must be a link (bg.link) or a network run (bg.run_network)")
-    return table_from_state(strategy, source)
+    check_strategy(strategy)
+    table = np.zeros((2, 2, 2, 2))
+    for x, y in itertools.product((0, 1), repeat=2):
+        table[:, :, x, y] = outcome_probabilities(source, strategy["alice"][x], strategy["bob"][y],
+                                                  strategy.get("alice_correction"), strategy.get("bob_correction"))
+    return table
 
 
 # ---------------------------------------------------------------- numbers from tables and counts
@@ -147,9 +153,8 @@ def correlations(table):
     """2x2 array E[x, y] = p(a == b) - p(a != b) for each pair of questions.
 
     Example:
-        >>> from bellgame.qubits import bell_pair
-        >>> from bellgame.strategies import optimal_strategy
-        >>> np.round(correlations(table_from_state(optimal_strategy(), bell_pair())), 3)
+        >>> import bellgame as bg
+        >>> np.round(correlations(table_from_strategy(bg.optimal_strategy(), bg.bell_pair())), 3)
         array([[ 0.707,  0.707],
                [ 0.707, -0.707]])
     """
@@ -164,9 +169,8 @@ def chsh_value(table):
     (Win rate = 1/2 + S/8.)
 
     Example:
-        >>> from bellgame.qubits import bell_pair
-        >>> from bellgame.strategies import optimal_strategy
-        >>> round(chsh_value(table_from_state(optimal_strategy(), bell_pair())), 4)
+        >>> import bellgame as bg
+        >>> round(chsh_value(table_from_strategy(bg.optimal_strategy(), bg.bell_pair())), 4)
         2.8284
     """
     e = correlations(table)
@@ -207,7 +211,15 @@ def _counts_from_table(table, xs, ys, rng):
     return counts
 
 
-def _counts(xs, ys, a, b):
+def count_rounds(xs, ys, a, b):
+    """Counts ``{(x, y): {"00": n, "01": n, "10": n, "11": n}}`` of played rounds.
+
+    ``xs``, ``ys`` are each round's questions and ``a``, ``b`` its answers.
+
+    Example:
+        >>> count_rounds([0, 1], [1, 1], [0, 1], [1, 1])[(1, 1)]
+        {'00': 0, '01': 0, '10': 0, '11': 1}
+    """
     counts = _no_counts()
     for x, y, ai, bi in zip(xs, ys, a, b):
         counts[int(x), int(y)][f"{ai}{bi}"] += 1
@@ -385,32 +397,27 @@ def _players_table(alice, bob, source, kind):
             for y in (0, 1):
                 table[plays_a[x][1][0], plays_b[y][1][0], x, y] = 1.0
         return table, {}
-    coincidence = 0.0
-    for x in (0, 1):
+    for x, y in itertools.product((0, 1), repeat=2):
         (angle_a, correction_a), map_a = plays_a[x]
-        for y in (0, 1):
-            (angle_b, correction_b), map_b = plays_b[y]
-            settings = {"alice": [angle_a, angle_a], "bob": [angle_b, angle_b]}
-            if correction_a is not None:
-                settings["alice_correction"] = list(correction_a)
-            if correction_b is not None:
-                settings["bob_correction"] = list(correction_b)
-            outcomes, extras = _strategy_table(settings, source, kind)
-            coincidence += extras.get("coincidence_prob", 0.0) / 4
-            for oa in (0, 1):
-                for ob in (0, 1):
-                    table[map_a[oa], map_b[ob], x, y] += outcomes[oa, ob, 0, 0]
-    return table, ({"coincidence_prob": coincidence} if link else {})
+        (angle_b, correction_b), map_b = plays_b[y]
+        outcomes = outcome_probabilities(source, angle_a, angle_b, correction_a, correction_b)
+        for oa, ob in itertools.product((0, 1), repeat=2):
+            table[map_a[oa], map_b[ob], x, y] += outcomes[oa, ob]
+    return table, _link_extras(source, kind)
 
 
 def _strategy_table(strategy, source, kind):
     """(table, extras) for a strategy dict on a source."""
-    if kind == "link":
-        from .link import link_outcomes
+    return table_from_strategy(strategy, source), _link_extras(source, kind)
 
-        table, coincidence_prob = link_outcomes(source, strategy)
-        return table, {"coincidence_prob": coincidence_prob}
-    return table_from_strategy(strategy, source), {}
+
+def _link_extras(source, kind):
+    """What a result adds on a photonic link: ``coincidence_prob`` (see ``bg.coincidence_prob``)."""
+    if kind != "link":
+        return {}
+    from .link import coincidence_prob
+
+    return {"coincidence_prob": coincidence_prob(source)}
 
 
 def _questions(n, rng, questions):
@@ -562,7 +569,7 @@ def play(team, source=None, rounds=None, seed=None, questions=None):
                 counts = _no_counts()
             else:
                 a, b = _play_rounds(alice, bob, xs, ys, rng, None if state is None else lambda i: state)
-                counts = _counts(xs, ys, a, b)
+                counts = count_rounds(xs, ys, a, b)
         result = summarize_counts(counts)
     result.update(extras)
     if kind == "dict":
@@ -596,6 +603,6 @@ def _replay(strategy, alice, bob, run, rng, questions):
         rows = np.flatnonzero(played)
         a[rows], b[rows] = _play_rounds(alice, bob, x[rows], y[rows], rng, lambda i: states[rows[i]])
     win = played & ((a ^ b) == (x & y))
-    result = summarize_counts(_counts(x[played], y[played], a[played], b[played]))
+    result = summarize_counts(count_rounds(x[played], y[played], a[played], b[played]))
     result["history"] = {**h, "x": x, "y": y, "a": a, "b": b, "played": played, "win": win}
     return result

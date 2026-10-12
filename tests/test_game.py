@@ -244,3 +244,28 @@ def test_bad_teams_and_sources_are_refused():
         bg.play(bg.optimal_strategy(), np.eye(2))
     with pytest.raises(ValueError, match="run"):
         bg.play(bg.optimal_strategy(), bg.bell_pair(), rounds="run")
+
+
+@pytest.mark.parametrize("source", [bg.bell_pair(0.9), {"state": bg.bell_pair(0.8)}, bg.link(distance_km=5)])
+def test_a_strategy_table_is_outcome_probabilities_at_its_angles(source):
+    strategy = bg.with_correction(bg.optimal_strategy(), [5, -10, 20], "bob")
+    table = bg.table_from_strategy(strategy, source)
+    for x, y in itertools.product((0, 1), repeat=2):
+        p = bg.outcome_probabilities(source, strategy["alice"][x], strategy["bob"][y],
+                                     bob_correction=strategy["bob_correction"])
+        assert np.allclose(table[:, :, x, y], p)
+        assert p.sum() == pytest.approx(1)
+
+
+def test_outcome_probabilities_need_a_source_and_good_angles():
+    with pytest.raises(ValueError, match="source of pairs"):
+        bg.outcome_probabilities(None, 0, 0)
+    with pytest.raises(ValueError, match="angle_deg"):
+        bg.outcome_probabilities(bg.bell_pair(), [0, 1], 0)
+    assert np.isnan(bg.outcome_probabilities(np.full((4, 4), np.nan), 0, 0)).all()
+
+
+def test_count_rounds():
+    counts = bg.count_rounds([0, 0, 1], [1, 1, 1], [0, 1, 1], [0, 1, 0])
+    assert counts[(0, 1)] == {"00": 1, "01": 0, "10": 0, "11": 1} and counts[(1, 1)]["10"] == 1
+    assert sum(counts[(0, 0)].values()) == 0

@@ -17,24 +17,24 @@ from .game import (
     Qubit,
     chsh_value,
     correlations,
+    count_rounds,
+    outcome_probabilities,
     play,
     referee_wins,
     sample_counts,
     summarize_counts,
     table_from_counts,
-    table_from_state,
     table_from_strategy,
     win_rate,
 )
 from .link import (
     arriving_state,
     check_link,
+    coincidence_prob,
     dark_count_prob,
     describe_link,
     fock_pair_weights,
     link,
-    link_outcomes,
-    link_table,
     photon_numbers,
 )
 from .network import (

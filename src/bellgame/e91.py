@@ -7,8 +7,9 @@ results):
 * when they used the **same** angle, their bits should be equal: those rounds
   become the secret **key**
 * rounds with the right **different** angles are used to compute the CHSH
-  number S. If S > 2, the pairs really were entangled, so no eavesdropper can
-  know the key. If S <= 2, throw the key away.
+  number S. S > 2 shows the pairs are entangled; if S <= 2, throw the key away.
+  How much of the key an eavesdropper could know shrinks as S approaches
+  2 sqrt(2) = 2.83: S > 2 alone does not make the key secret.
 
 Example:
     >>> import bellgame as bg
@@ -20,7 +21,7 @@ Example:
 import numpy as np
 
 from .defaults import check
-from .game import _no_counts, chsh_value, correlations, table_from_counts, table_from_strategy
+from .game import chsh_value, correlations, count_rounds, outcome_probabilities, table_from_counts
 
 # Polarizer angles in degrees. Index i in "alice" is Alice's basis i.
 E91_SETTINGS = {
@@ -43,24 +44,24 @@ E91_OLD_SETTINGS = {
 }
 
 
-def basis_pair_table(source, alice_deg, bob_deg, corrections=None):
-    """p[a, b]: outcome probabilities when Alice measures at ``alice_deg`` and Bob at ``bob_deg``."""
-    strategy = {"alice": [alice_deg, alice_deg], "bob": [bob_deg, bob_deg]}
-    if corrections:
-        strategy.update(corrections)
-    return table_from_strategy(strategy, source)[:, :, 0, 0]
-
-
 def run_e91(source, rounds=10000, seed=None, settings=None, corrections=None):
     """Run E91 on a source of entangled pairs.
 
-    * ``source``: anything ``bg.play`` accepts (a 4x4 state, a link, a path result)
+    * ``source``: anything ``bg.play`` accepts (a 4x4 state, a link, a network run)
     * ``rounds``: number of pairs measured; ``None`` gives the exact expected values
     * ``settings``: the angles and pairings (default ``bg.E91_SETTINGS``)
-    * ``corrections``: e.g. ``{"alice_correction": [a, b, c]}`` from ``bg.find_alignment``
+    * ``corrections``: ``{"alice_correction": [a, b, c], "bob_correction": [...]}`` (either
+      or both), e.g. from ``bg.find_alignment``
 
-    Returns a dict with ``key_alice``, ``key_bob`` (lists of bits), ``key_length``,
-    ``qber`` (fraction of key bits that disagree), ``S``, ``E``, and ``secure`` (S > 2).
+    With ``rounds=N``, returns ``key_alice``, ``key_bob`` (lists of bits), ``key_length``,
+    ``qber`` (fraction of key bits that disagree), ``S``, ``E``, ``secure``, ``rounds`` and
+    ``chsh_counts``. With ``rounds=None`` there are no key bits: it returns the expected
+    ``qber``, ``S``, ``E`` and ``secure``, and ``key_fraction``, the share of rounds that
+    become key. ``secure`` is only the S > 2 test (see the module notes).
+
+    On a network run, the rounds are drawn from the run's average delivered pair. That
+    gives the same statistics as measuring each recorded pair in turn, since every round's
+    angles are random; ``bg.play(..., rounds="run")`` replays the pairs one by one.
 
     A source with no data (a network run in which no round was played) gives no
     key: ``rounds`` is 0, the key is empty, ``qber`` and ``S`` are NaN, and it is
@@ -68,11 +69,13 @@ def run_e91(source, rounds=10000, seed=None, settings=None, corrections=None):
     """
     if settings is None:
         settings = E91_SETTINGS
+    corrections = dict(corrections or {})
+    unknown = set(corrections) - {"alice_correction", "bob_correction"}
+    if unknown:
+        raise ValueError(f"corrections can only have 'alice_correction' and 'bob_correction', got {sorted(unknown)}")
+    probs = {(i, j): outcome_probabilities(source, alice_deg, bob_deg, **corrections)
+             for i, alice_deg in enumerate(settings["alice"]) for j, bob_deg in enumerate(settings["bob"])}
     n_a, n_b = len(settings["alice"]), len(settings["bob"])
-    probs = {}
-    for i in range(n_a):
-        for j in range(n_b):
-            probs[(i, j)] = basis_pair_table(source, settings["alice"][i], settings["bob"][j], corrections)
 
     if rounds is None:
         return _exact(probs, settings)
@@ -102,11 +105,14 @@ def run_e91(source, rounds=10000, seed=None, settings=None, corrections=None):
     key_bob = b_bits[key_mask].tolist()
     errors = sum(ka != kb for ka, kb in zip(key_alice, key_bob))
 
-    counts = _no_counts()
-    for (i, j), (x, y) in settings["chsh_pairs"].items():
+    # the CHSH rounds, each with the question pair (x, y) its two angles stand for
+    chsh = np.zeros(rounds, dtype=bool)
+    x, y = np.zeros(rounds, dtype=int), np.zeros(rounds, dtype=int)
+    for (i, j), (qx, qy) in settings["chsh_pairs"].items():
         mask = (a_basis == i) & (b_basis == j)
-        for a, b in zip(a_bits[mask], b_bits[mask]):
-            counts[(x, y)][f"{a}{b}"] += 1
+        chsh |= mask
+        x[mask], y[mask] = qx, qy
+    counts = count_rounds(x[chsh], y[chsh], a_bits[chsh], b_bits[chsh])
     table = table_from_counts(counts)
     s = chsh_value(table)
     return {
