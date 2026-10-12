@@ -31,22 +31,6 @@ Example:
     0.8536
 """
 
-# MERGE NOTE for the tutorial-rewrite branch (delete this note once that branch is merged):
-# After merging, run `ruff format tutorial` and add tutorial to the Formatting step in ci.yml.
-# play_classical, play_chsh, play_history, play_rounds, table_from_classical, answer,
-# uses_history and summarize are gone. Everything goes through bg.play:
-#   bg.play_classical(alice, bob, rounds=N, ...)  ->  bg.play((alice, bob), rounds=N, ...)
-#   bg.play_chsh(strategy, source, rounds=N, ...)  ->  bg.play(strategy, source, rounds=N, ...)
-#   bg.play_history(strategy, run, seed=s)         ->  bg.play(strategy, run, rounds="run", seed=s)
-# Players always take their history: def alice(bit, history), and on a source of pairs
-# def alice(bit, history, qubit). The built-in players (always_zero, ...) take (bit, history, qubit=None).
-# A sampled result's "table" is now the measured table (the one its S comes from), not the exact one.
-# bg.from_matrix: np.inf is now "no link" and 0 is a 0 km link; bg.to_matrix writes np.inf for no link.
-# A matrix that uses 0 for "no link" must change to np.inf (np.full((n, n), np.inf), diagonal 0).
-# table_from_state, link_table and link_outcomes are gone: bg.table_from_strategy(strategy, source) takes
-# any source, bg.outcome_probabilities(source, alice_deg, bob_deg) gives one pair of settings, and
-# bg.coincidence_prob(link) is the link's coincidence probability.
-
 import inspect
 import itertools
 

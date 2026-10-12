@@ -109,3 +109,15 @@ def test_polarization_angles_undo_polarization_rotation():
         u = q[0] * np.eye(2) - 1j * (q[1] * bg.qubits.X + q[2] * bg.qubits.Y + q[3] * bg.qubits.Z)
         v = bg.polarization_rotation(bg.polarization_angles(u))
         assert np.isclose(abs(np.trace(u.conj().T @ v)), 2)  # equal up to a global phase
+
+
+def test_any_scipy_method_and_its_options():
+    twisted = bg.misaligned_source(bg.bell_pair(), bg.random_misalignment(1))
+    found = bg.find_alignment(twisted, method="Powell", seed=1, options={"xtol": 1e-3})
+    assert found["S"] > 2.8
+    assert len(found["path"]) == found["evaluations"] == len(found["history"])
+
+
+def test_unknown_method_is_rejected_before_any_evaluation():
+    with pytest.raises(ValueError, match="Unknown solver"):
+        bg.find_alignment(bg.bell_pair(), method="not-a-method")

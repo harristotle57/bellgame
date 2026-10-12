@@ -101,7 +101,17 @@ def chsh_objective(source, strategy=None, player="alice", rounds=None, seed=None
     return objective
 
 
-def _run_method(objective, method, x0, max_evaluations, time_limit_s, start):
+def _default_options(method, x0, max_evaluations):
+    """Starting step and budget for the methods bellgame has tuned; scipy's defaults for the rest."""
+    if method == "Nelder-Mead":
+        simplex = [x0] + [x0 + STEP_DEG * np.eye(3)[i] for i in range(3)]
+        return {"initial_simplex": np.array(simplex), "maxfev": max_evaluations, "xatol": 1e-3, "fatol": 1e-6}
+    if method == "COBYQA":
+        return {"initial_tr_radius": STEP_DEG, "maxfev": max_evaluations}
+    return {}
+
+
+def _run_method(objective, method, x0, max_evaluations, time_limit_s, start, minimize_kwargs=None):
     """Run one scipy method, stopping when the budget runs out. Returns the evaluated points."""
     points = []
 
@@ -117,19 +127,11 @@ def _run_method(objective, method, x0, max_evaluations, time_limit_s, start):
         return value
 
     x0 = np.asarray(x0, dtype=float)
+    kwargs = dict(minimize_kwargs or {})
+    options = {**_default_options(method, x0, max_evaluations), **kwargs.pop("options", {})}
     try:
-        if method == "Nelder-Mead":
-            simplex = [x0] + [x0 + STEP_DEG * np.eye(3)[i] for i in range(3)]
-            minimize(
-                budgeted,
-                x0,
-                method="Nelder-Mead",
-                options={"initial_simplex": np.array(simplex), "maxfev": max_evaluations, "xatol": 1e-3, "fatol": 1e-6},
-            )
-        elif method == "COBYQA":
-            minimize(budgeted, x0, method="COBYQA", options={"initial_tr_radius": STEP_DEG, "maxfev": max_evaluations})
-        else:
-            raise ValueError(f"method must be one of {METHODS}, got {method!r}")
+        # scipy raises ValueError for a method it doesn't know, before any evaluation
+        minimize(budgeted, x0, method=method, options=options, **kwargs)
     except (_OutOfBudget, _NoData):
         pass
     return points
@@ -150,6 +152,7 @@ def find_alignment(
     time_limit_s=None,
     restarts=3,
     target_S=2.8,
+    **minimize_kwargs,
 ):
     """Search for the correction angles that give the biggest S.
 
@@ -169,8 +172,22 @@ def find_alignment(
     is no answer (``correction`` and ``S`` are NaN, ``strategy`` is None). Run the
     network longer, or with another seed, to get rounds.
 
+    * ``method``: any ``scipy.optimize.minimize`` method (scipy raises ValueError
+      for one it doesn't know). Nelder-Mead and COBYQA start with 45-degree steps.
+    * ``minimize_kwargs``: passed on to ``minimize``. ``options`` is merged over
+      bellgame's defaults, e.g. ``options={"xatol": 0.1}``. ``max_evaluations``
+      and ``time_limit_s`` cap the search whatever the method's own options say.
+
     Returns a dict with ``correction`` (3 angles in degrees), ``S`` (checked
-    exactly at the end), ``strategy`` (ready to use), ``evaluations`` and ``history``.
+    exactly at the end), ``strategy`` (ready to use), ``evaluations``,
+    ``history`` (``(seconds, S)`` per evaluation) and ``path`` (the angles tried
+    at each evaluation, in order).
+
+    Example:
+        >>> import bellgame as bg
+        >>> twisted = bg.misalign(bg.bell_pair(), bob_deg=[20, -35, 50])
+        >>> bg.find_alignment(twisted, method="Powell", seed=1)["S"] > 2.8
+        True
     """
     max_evaluations = check("max_evaluations", max_evaluations)
     if time_limit_s is not None:
@@ -181,11 +198,12 @@ def find_alignment(
     history = []
     objective = chsh_objective(source, strategy, player, rounds=rounds, seed=int(rng.integers(2**32)), history=history)
     start = time.perf_counter()
-    best_value, best_x, evaluations = np.inf, np.zeros(3), 0
+    best_value, best_x, evaluations, path = np.inf, np.zeros(3), 0, []
     for _ in range(max(1, restarts)):
         x0 = rng.uniform(-90, 90, size=3)
-        points = _run_method(objective, method, x0, max_evaluations - evaluations, time_limit_s, start)
+        points = _run_method(objective, method, x0, max_evaluations - evaluations, time_limit_s, start, minimize_kwargs)
         evaluations += len(points)
+        path.extend([float(a) for a in x] for _, x in points)
         if np.isnan(points[-1][0]):  # no rounds to measure
             return {
                 "correction": [float("nan")] * 3,
@@ -194,6 +212,7 @@ def find_alignment(
                 "strategy": None,
                 "evaluations": evaluations,
                 "history": history,
+                "path": path,
             }
         for value, x in points:
             if value < best_value:
@@ -213,6 +232,7 @@ def find_alignment(
         "strategy": best_strategy,
         "evaluations": evaluations,
         "history": history,
+        "path": path,
     }
 
 

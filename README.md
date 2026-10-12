@@ -198,19 +198,20 @@ by one. The same `seed` gives the same run. A sweep is a loop over this: see
 
 ## Tutorial
 
-Step-by-step notebooks (plain Python files with `# %%` cells), from the
-classical game to networks. Work through them in order.
+Five notebooks (plain Python files with `# %%` cells) that build up to one goal:
+E91 quantum key distribution over a simulated network. Each part introduces the
+bellgame features it needs, so by the end you have used most of the package.
+Work through them in order.
 
-| Part | Topic |
-|---|---|
-| 01 classical game | no classical team beats 75% |
-| 02 many rounds | finite experiments only estimate probabilities |
-| 03 quantum strategy | entanglement wins 85.4% |
-| 04 photons as Fock modes | real sources make 0, 1, 2... pairs |
-| 05 parameter studies | loss, dark counts, the detection loophole |
-| 06 misalignment | undoing polarization twists with scipy.optimize |
-| 07 E91 | a secret key from a Bell test |
-| 08 networks | playing across a network: swapping, waiting memories, missing pairs |
+| Part | Topic | bellgame features |
+|---|---|---|
+| 01 CHSH game | classical teams win at most 75%, entangled ones 85.4%; finite runs only estimate S | `play`, `bell_pair`, plots |
+| 02 E91 and Eve | a key from a Bell test; noise and an eavesdropper, and why S tells them apart | `run_e91`, `bell_diagonal`, `strategies.projectors` |
+| 03 alignment | fiber twist ruins the key; finding the correction with scipy.optimize | `misaligned_source`, `chsh_objective`, `find_alignment` |
+| 04 networks | E91 across a SeQUeNCe network: swapping, decaying memories, missing pairs | `two_star`, `run_network`, `play(..., rounds="run")`, `to_sequence` |
+| 05 key rate | from S and QBER to secret key bits per second, swept over network designs | all of the above |
+
+The photon-source (Fock) model isn't in the tutorial yet.
 
 ## Examples
 
@@ -264,7 +265,7 @@ to use it.
   decides how often pairs appear). Swaps twirl pairs into Werner form
   (SeQUeNCe's default). Polarization twists act on the delivered pair, at the players.
 * `no_click="discard"` (the default) keeps only rounds where both sides click:
-  the fair-sampling assumption. Tutorial 05 shows what happens without it.
+  the fair-sampling assumption.
 
 ## Using SeQUeNCe and scipy directly
 
@@ -272,7 +273,7 @@ to use it.
 run it yourself, do so inside `with bg.bell_diagonal_mode():`, which sets
 SeQUeNCe's protocols the way bellgame uses them and puts them back afterwards.
 `bg.chsh_objective(source)` is an ordinary function you can pass to
-`scipy.optimize.minimize`. Tutorial parts 06 and 08 show both.
+`scipy.optimize.minimize`. Tutorial parts 03 and 04 show both.
 
 ## Layout
 
