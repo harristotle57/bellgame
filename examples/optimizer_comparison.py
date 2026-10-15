@@ -18,7 +18,22 @@ print(
     f"best possible S {bg.play(bg.optimal_strategy(), run)['S']:.3f}"
 )
 
-race = bg.compare_optimizers(run, methods=("Nelder-Mead", "COBYQA"), runs=8, rounds=2500, max_evaluations=200, seed=0)
+# Each method can get its own scipy.optimize.minimize arguments. The values below are bellgame's
+# defaults, written out as a starting point to tune. Nelder-Mead's other default, a 45-degree
+# initial_simplex around each random start, isn't listed; maxfev comes from max_evaluations.
+method_kwargs = {
+    "Nelder-Mead": {"options": {"xatol": 1e-3, "fatol": 1e-6}},  # stop when steps and S changes are this small
+    "COBYQA": {"options": {"initial_tr_radius": 45.0}},  # first step size, in degrees
+}
+race = bg.compare_optimizers(
+    run,
+    methods=("Nelder-Mead", "COBYQA"),
+    runs=8,
+    rounds=2500,
+    max_evaluations=200,
+    seed=0,
+    method_kwargs=method_kwargs,
+)
 ax = None
 for method, data in race.items():
     ax = bg.plot_convergence(data["histories"], ax=ax, label=method)

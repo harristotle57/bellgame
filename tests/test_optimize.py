@@ -47,6 +47,20 @@ def test_compare_optimizers_shape_and_quality():
         assert min(out[method]["validated_S"]) > 2.6
 
 
+def test_compare_optimizers_method_kwargs_reach_only_their_method():
+    out = bg.compare_optimizers(
+        bg.bell_pair(), runs=1, max_evaluations=120, seed=1, method_kwargs={"Nelder-Mead": {"options": {"maxfev": 10}}}
+    )
+    assert len(out["Nelder-Mead"]["histories"][0]) <= 12  # scipy may overshoot maxfev by a step
+    assert len(out["COBYQA"]["histories"][0]) > 12
+
+
+@pytest.mark.parametrize("bad", [{"Powell": {}}, {"Nelder-Mead": 0.1}, [("Nelder-Mead", {})]])
+def test_compare_optimizers_refuses_bad_method_kwargs(bad):
+    with pytest.raises(ValueError, match="method_kwargs"):
+        bg.compare_optimizers(bg.bell_pair(), runs=1, method_kwargs=bad)
+
+
 def test_link_source_alignment():
     twisted = bg.misaligned_source(bg.link(), bg.random_misalignment(2))
     found = bg.find_alignment(twisted, seed=0, max_evaluations=150)

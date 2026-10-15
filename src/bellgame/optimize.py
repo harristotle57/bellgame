@@ -281,7 +281,9 @@ def misaligned_source(source, twist):
     return misalign(source, twist["alice"], twist["bob"])
 
 
-def compare_optimizers(source, methods=METHODS, runs=5, rounds=2500, seed=0, max_evaluations=200, time_limit_s=None):
+def compare_optimizers(
+    source, methods=METHODS, runs=5, rounds=2500, seed=0, max_evaluations=200, time_limit_s=None, method_kwargs=None
+):
     """Race optimizers at undoing random misalignment, like the original study.
 
     Each run draws a new random twist for both players (the same twists for
@@ -289,9 +291,22 @@ def compare_optimizers(source, methods=METHODS, runs=5, rounds=2500, seed=0, max
     mode (``rounds=N``) S is noisy; at the end every answer is checked with the
     exact S (``validated_S``).
 
+    * ``method_kwargs``: extra ``scipy.optimize.minimize`` arguments for each
+      method, passed on to ``bg.find_alignment``, e.g.
+      ``{"Nelder-Mead": {"options": {"xatol": 0.1}}, "COBYQA": {"tol": 1e-3}}``.
+      Methods left out keep bellgame's defaults.
+
     Returns ``{method: {"histories": [...], "validated_S": [...], "corrections": [...]}}``.
     Plot the histories with ``bg.plot_convergence``.
     """
+    method_kwargs = {} if method_kwargs is None else method_kwargs
+    if not isinstance(method_kwargs, dict) or not all(isinstance(kwargs, dict) for kwargs in method_kwargs.values()):
+        raise ValueError('method_kwargs is a dict of dicts like {"Nelder-Mead": {"options": {"xatol": 0.1}}}')
+    unknown = sorted(set(method_kwargs) - set(methods))
+    if unknown:
+        raise ValueError(
+            f"method_kwargs names methods that are not in the race: {unknown}; methods are {list(methods)}"
+        )
     rng = np.random.default_rng(seed)
     out = {m: {"histories": [], "validated_S": [], "corrections": []} for m in methods}
     for _ in range(runs):
@@ -306,6 +321,7 @@ def compare_optimizers(source, methods=METHODS, runs=5, rounds=2500, seed=0, max
                 max_evaluations=max_evaluations,
                 time_limit_s=time_limit_s,
                 restarts=1,
+                **method_kwargs.get(method, {}),
             )
             out[method]["histories"].append(found["history"])
             out[method]["validated_S"].append(found["S"])
