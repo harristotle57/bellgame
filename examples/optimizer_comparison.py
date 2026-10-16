@@ -33,6 +33,7 @@ race = bg.compare_optimizers(
     max_evaluations=200,
     seed=0,
     method_kwargs=method_kwargs,
+    bounds_deg=None,  # the default: search every angle. To limit it: [(-90, 90), (-90, 90), (0, 45)]
 )
 ax = None
 for method, data in race.items():

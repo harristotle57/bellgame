@@ -20,6 +20,7 @@ Example:
 """
 
 import time
+import warnings
 
 import numpy as np
 from scipy.optimize import minimize
@@ -111,7 +112,24 @@ def _default_options(method, x0, max_evaluations):
     return {}
 
 
-def _run_method(objective, method, x0, max_evaluations, time_limit_s, start, minimize_kwargs=None):
+def _check_bounds(bounds_deg):
+    """``bounds_deg`` as three ``(lowest, highest)`` pairs of floats, or a ValueError."""
+    try:
+        shape = np.shape(bounds_deg)
+    except ValueError:  # ragged, like [(0, 10), (0,)]
+        shape = None
+    if isinstance(bounds_deg, (str, dict)) or shape != (3, 2):
+        raise ValueError(
+            "bounds_deg is one (lowest, highest) pair per correction angle, like "
+            f"[(-90, 90), (-90, 90), (0, 45)]; got {bounds_deg!r}"
+        )
+    pairs = [(check("angle_deg", low), check("angle_deg", high)) for low, high in bounds_deg]
+    if any(low > high for low, high in pairs):
+        raise ValueError(f"bounds_deg: each pair is (lowest, highest), got {bounds_deg!r}")
+    return pairs
+
+
+def _run_method(objective, method, x0, max_evaluations, time_limit_s, start, bounds_deg=None, minimize_kwargs=None):
     """Run one scipy method, stopping when the budget runs out. Returns the evaluated points."""
     points = []
 
@@ -130,10 +148,18 @@ def _run_method(objective, method, x0, max_evaluations, time_limit_s, start, min
     kwargs = dict(minimize_kwargs or {})
     options = {**_default_options(method, x0, max_evaluations), **kwargs.pop("options", {})}
     try:
-        # scipy raises ValueError for a method it doesn't know, before any evaluation
-        minimize(budgeted, x0, method=method, options=options, **kwargs)
+        with warnings.catch_warnings():
+            # scipy only warns, then searches without bounds, for a method that can't use them
+            warnings.filterwarnings("error", message="Method .* cannot handle bounds", category=RuntimeWarning)
+            # scipy raises ValueError for a method it doesn't know, before any evaluation
+            minimize(budgeted, x0, method=method, bounds=bounds_deg, options=options, **kwargs)
     except (_OutOfBudget, _NoData):
         pass
+    except RuntimeWarning:
+        raise ValueError(
+            f"{method} can't keep its search inside bounds_deg; methods that can include Nelder-Mead, "
+            "COBYQA, Powell and L-BFGS-B"
+        ) from None
     return points
 
 
@@ -152,6 +178,7 @@ def find_alignment(
     time_limit_s=None,
     restarts=3,
     target_S=2.8,
+    bounds_deg=None,
     **minimize_kwargs,
 ):
     """Search for the correction angles that give the biggest S.
@@ -174,6 +201,12 @@ def find_alignment(
 
     * ``method``: any ``scipy.optimize.minimize`` method (scipy raises ValueError
       for one it doesn't know). Nelder-Mead and COBYQA start with 45-degree steps.
+    * ``bounds_deg``: limits the search to one ``(lowest, highest)`` range per
+      correction angle, e.g. ``[(-90, 90), (-90, 90), (0, 45)]``; equal ends fix
+      that angle. The random starts are drawn inside the ranges too. A range
+      may cross 90 degrees, e.g. ``(60, 120)``, but answers are still reported in
+      (-90, 90]. ``None`` searches every angle. Methods that can't use bounds
+      (e.g. BFGS) raise ValueError.
     * ``minimize_kwargs``: passed on to ``minimize``. ``options`` is merged over
       bellgame's defaults, e.g. ``options={"xatol": 0.1}``. ``max_evaluations``
       and ``time_limit_s`` cap the search whatever the method's own options say.
@@ -192,6 +225,13 @@ def find_alignment(
     max_evaluations = check("max_evaluations", max_evaluations)
     if time_limit_s is not None:
         time_limit_s = check("time_limit_s", time_limit_s)
+    if "bounds" in minimize_kwargs:
+        raise ValueError("give bounds as bounds_deg, so the random starts are drawn inside them too")
+    if bounds_deg is None:
+        lowest, highest = -90.0, 90.0
+    else:
+        bounds_deg = _check_bounds(bounds_deg)
+        lowest, highest = np.transpose(bounds_deg)
     if strategy is None:
         strategy = optimal_strategy()
     rng = np.random.default_rng(seed)
@@ -200,8 +240,9 @@ def find_alignment(
     start = time.perf_counter()
     best_value, best_x, evaluations, path = np.inf, np.zeros(3), 0, []
     for _ in range(max(1, restarts)):
-        x0 = rng.uniform(-90, 90, size=3)
-        points = _run_method(objective, method, x0, max_evaluations - evaluations, time_limit_s, start, minimize_kwargs)
+        x0 = rng.uniform(lowest, highest, size=3)
+        budget = max_evaluations - evaluations
+        points = _run_method(objective, method, x0, budget, time_limit_s, start, bounds_deg, minimize_kwargs)
         evaluations += len(points)
         path.extend([float(a) for a in x] for _, x in points)
         if np.isnan(points[-1][0]):  # no rounds to measure
@@ -282,7 +323,15 @@ def misaligned_source(source, twist):
 
 
 def compare_optimizers(
-    source, methods=METHODS, runs=5, rounds=2500, seed=0, max_evaluations=200, time_limit_s=None, method_kwargs=None
+    source,
+    methods=METHODS,
+    runs=5,
+    rounds=2500,
+    seed=0,
+    max_evaluations=200,
+    time_limit_s=None,
+    method_kwargs=None,
+    bounds_deg=None,
 ):
     """Race optimizers at undoing random misalignment, like the original study.
 
@@ -295,6 +344,8 @@ def compare_optimizers(
       method, passed on to ``bg.find_alignment``, e.g.
       ``{"Nelder-Mead": {"options": {"xatol": 0.1}}, "COBYQA": {"tol": 1e-3}}``.
       Methods left out keep bellgame's defaults.
+    * ``bounds_deg``: one ``(lowest, highest)`` range per correction angle, the
+      same for every method; see ``bg.find_alignment``.
 
     Returns ``{method: {"histories": [...], "validated_S": [...], "corrections": [...]}}``.
     Plot the histories with ``bg.plot_convergence``.
@@ -321,6 +372,7 @@ def compare_optimizers(
                 max_evaluations=max_evaluations,
                 time_limit_s=time_limit_s,
                 restarts=1,
+                bounds_deg=bounds_deg,
                 **method_kwargs.get(method, {}),
             )
             out[method]["histories"].append(found["history"])

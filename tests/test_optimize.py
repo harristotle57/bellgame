@@ -55,6 +55,43 @@ def test_compare_optimizers_method_kwargs_reach_only_their_method():
     assert len(out["COBYQA"]["histories"][0]) > 12
 
 
+@pytest.mark.parametrize("method", ["Nelder-Mead", "COBYQA"])
+def test_bounds_keep_the_search_inside(method):
+    bounds = [(-90, 90), (10, 40), (5, 5)]  # equal ends fix the third angle
+    found = bg.find_alignment(bg.bell_pair(), method=method, seed=3, bounds_deg=bounds, max_evaluations=60)
+    path = np.array(found["path"])
+    assert np.all(path[:, 1] >= 10) and np.all(path[:, 1] <= 40)
+    assert np.allclose(path[:, 2], 5)
+
+
+def test_bounds_across_90_degrees_report_wrapped_answers():
+    found = bg.find_alignment(bg.bell_pair(), seed=0, bounds_deg=[(60, 120)] * 3, max_evaluations=40)
+    in_range = (np.array(found["path"]) >= 60) | (np.array(found["path"]) <= -60)
+    assert np.all(in_range) and np.all(np.abs(found["correction"]) <= 90)
+
+
+def test_compare_optimizers_passes_bounds_to_every_method():
+    out = bg.compare_optimizers(bg.bell_pair(), runs=1, max_evaluations=30, seed=0, bounds_deg=[(0, 20)] * 3)
+    for method in ("Nelder-Mead", "COBYQA"):
+        assert all(0 <= a <= 20 for a in out[method]["corrections"][0])
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {"bounds_deg": [(0, 10)] * 2},
+        {"bounds_deg": [(0, 10), (0, 10), (0,)]},
+        {"bounds_deg": [(10, 0)] * 3},
+        {"bounds_deg": [(0, float("nan"))] * 3},
+        {"bounds_deg": [(-90, 90)] * 3, "method": "BFGS"},
+        {"bounds": [(-90, 90)] * 3},
+    ],
+)
+def test_bad_bounds_are_refused(bad):
+    with pytest.raises(ValueError, match="bounds|angle_deg"):
+        bg.find_alignment(bg.bell_pair(), **bad)
+
+
 @pytest.mark.parametrize("bad", [{"Powell": {}}, {"Nelder-Mead": 0.1}, [("Nelder-Mead", {})]])
 def test_compare_optimizers_refuses_bad_method_kwargs(bad):
     with pytest.raises(ValueError, match="method_kwargs"):
